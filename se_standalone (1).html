@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Schneider Electric — Evaluación Técnica Adaptativa</title>
+<!-- React + ReactDOM desde CDN -->
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<!-- Babel para transformar JSX en el navegador -->
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: #f4f4f4; min-height: 100vh; }
+  input[type=range] { cursor: pointer; }
+  button { font-family: Arial, sans-serif; transition: opacity .15s; }
+  button:hover:not(:disabled) { opacity: .85; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #f4f4f4; }
+  ::-webkit-scrollbar-thumb { background: #009E4D; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState } = React;
+
+/* ── Schneider Electric brand ── */
+const SE = {
+  green:"#009E4D", greenDark:"#007A3A", greenLight:"#E6F5ED",
+  black:"#1A1A1A", gray900:"#2D2D2D", gray700:"#4A4A4A", gray500:"#767676",
+  gray300:"#C4C4C4", gray100:"#F4F4F4", gray50:"#FAFAFA", white:"#FFFFFF",
+  red:"#C0392B", redLight:"#FDECEA", amber:"#E67E22", amberLight:"#FEF3E7",
+};
+
+const css = {
+  sectionTitle:{ fontSize:11, fontWeight:700, color:SE.green, textTransform:"uppercase",
+    letterSpacing:".1em", borderBottom:`2px solid ${SE.green}`, paddingBottom:6, marginBottom:14 },
+  btn:{ width:"100%", padding:"13px 20px", borderRadius:2, border:"none",
+    fontSize:14, fontWeight:700, cursor:"pointer", letterSpacing:".04em", textTransform:"uppercase" },
+};
+
+/* ── i18n ── */
+const T = {
+  es:{
+    appTitle:"Evaluación Técnica Adaptativa", appSub:"Herramienta de Evaluación de Competencias",
+    stepRole:"1. Rol del evaluado", stepBU:"2. Business Units a evaluar",
+    stepDesired:"3. Nivel objetivo personal (por subdominio)",
+    desiredSub:"El slider está limitado al techo de tu rol. Ajusta según tu objetivo.",
+    stepManager:"4. Nivel objetivo del puesto (Manager / RRHH)",
+    managerSub:"Define el nivel requerido para el puesto. Limitado al techo del rol.",
+    start:"Iniciar evaluación", yes:"Sí", no:"No", progress:"Progreso", of:"de",
+    results:"Informe de evaluación", profileActual:"Perfil actual", profileSelf:"Objetivo personal",
+    profileManager:"Objetivo del puesto", radarTitle:"Actual vs objetivos",
+    buScores:"Puntuación por Business Unit", axesTitle:"Ejes de competencia",
+    gaps:"Gaps detectados", noGaps:"Sin gaps críticos detectados.",
+    restart:"Nueva evaluación", actual:"Actual", selfTarget:"Mi objetivo", managerTarget:"Obj. puesto",
+    level:"Nivel",
+    profileExplain:{
+      strategic_consultant:"Visión global, digitalización end-to-end y valor de negocio. Domina múltiples BUs.",
+      architect:"Diseña arquitecturas completas. Conoce producto, integración y dimensionamiento.",
+      integrator:"Conecta sistemas y protocolos. Cómodo con comunicaciones, SCADA y edge.",
+      operative:"Conocimiento práctico en campo. Puesta en marcha, mantenimiento y troubleshooting.",
+      silo_specialist:"Experto en un área. Necesita ampliar cobertura hacia otras BUs."
+    }
+  },
+  en:{
+    appTitle:"Adaptive Technical Assessment", appSub:"Competency Assessment Tool",
+    stepRole:"1. Select your role", stepBU:"2. Business Units to assess",
+    stepDesired:"3. Personal target level (per subdomain)",
+    desiredSub:"Slider is capped at your role ceiling. Adjust to your personal target.",
+    stepManager:"4. Position target level (Manager / HR)",
+    managerSub:"Set the required level for the position. Capped at role ceiling.",
+    start:"Start assessment", yes:"Yes", no:"No", progress:"Progress", of:"of",
+    results:"Assessment report", profileActual:"Current profile", profileSelf:"Personal target",
+    profileManager:"Position target", radarTitle:"Actual vs targets",
+    buScores:"Score by Business Unit", axesTitle:"Competency axes",
+    gaps:"Detected gaps", noGaps:"No critical gaps detected.",
+    restart:"New assessment", actual:"Actual", selfTarget:"My target", managerTarget:"Position target",
+    level:"Level",
+    profileExplain:{
+      strategic_consultant:"End-to-end vision, digitalization and business value. Masters multiple BUs.",
+      architect:"Designs complete architectures. Knows products, integration and sizing.",
+      integrator:"Connects systems and protocols. Comfortable with comms, SCADA and edge.",
+      operative:"Practical field knowledge. Commissioning, maintenance and troubleshooting.",
+      silo_specialist:"Expert in one area. Needs to expand coverage across other BUs."
+    }
+  }
+};
+
+const ROLES = [
+  {id:"fsr",icon:"⚙",label:{es:"FSR — Field Service Representative",en:"FSR — Field Service Representative"},focus:{es:"Operación · Configuración · Troubleshooting",en:"Operation · Configuration · Troubleshooting"}},
+  {id:"planner",icon:"📋",label:{es:"Planificador",en:"Planner"},focus:{es:"Coordinación · Planificación · Ofertas · Recursos",en:"Coordination · Planning · Tendering support · Resources"}},
+  {id:"tendering",icon:"📐",label:{es:"Tendering — Diseño & Arquitectura",en:"Tendering — Design & Architecture"},focus:{es:"Selección · Dimensionamiento · Arquitectura",en:"Selection · Sizing · Architecture"}},
+  {id:"consultant",icon:"💡",label:{es:"Consultor — Visión Global",en:"Consultant — Global Vision"},focus:{es:"Digitalización · Negocio · Integración de sistemas",en:"Digitalization · Business · Systems integration"}}
+];
+
+const BUS = [
+  {id:"dp",label:"Digital Power",color:"#005EA6",bg:"#E6F0FA"},
+  {id:"pw",label:"Power",color:"#1A6636",bg:"#E6F5ED"},
+  {id:"ind",label:"Industry",color:"#6B21A8",bg:"#F5F0FF"},
+  {id:"bld",label:"Building",color:"#B45309",bg:"#FEF3E7"},
+  {id:"sp",label:"Secure Power",color:"#009E4D",bg:"#E6F5ED"},
+  {id:"co",label:"Cooling",color:"#0369A1",bg:"#EFF6FF"}
+];
+
+const AXES = ["digitalization","operation","configuration","integration","design","diagnosis"];
+const AXIS_LABEL = {
+  es:{digitalization:"Digitalización",operation:"Operación",configuration:"Configuración",integration:"Integración",design:"Diseño",diagnosis:"Diagnóstico"},
+  en:{digitalization:"Digitalization",operation:"Operation",configuration:"Configuration",integration:"Integration",design:"Design",diagnosis:"Diagnosis"}
+};
+
+const PROFILES = [
+  {id:"strategic_consultant",color:"#6B21A8",label:{es:"Consultor Estratégico",en:"Strategic Consultant"},min:4.0},
+  {id:"architect",color:"#005EA6",label:{es:"Arquitecto de Soluciones",en:"Solutions Architect"},min:3.0},
+  {id:"integrator",color:"#009E4D",label:{es:"Integrador de Sistemas",en:"Systems Integrator"},min:2.0},
+  {id:"operative",color:"#B45309",label:{es:"Perfil Operativo",en:"Operative Profile"},min:1.0},
+  {id:"silo_specialist",color:"#767676",label:{es:"Especialista en Silo",en:"Silo Specialist"},min:0}
+];
+
+const CEILING_LABEL = {
+  1:{es:"Conocimiento básico",en:"Basic knowledge"},2:{es:"Conocimiento aplicado",en:"Applied knowledge"},
+  3:{es:"Configuración",en:"Configuration"},4:{es:"Troubleshooting",en:"Troubleshooting"},
+  5:{es:"Diseño / Arquitectura",en:"Design / Architecture"}
+};
+
+const CEILINGS = {
+  metering:{fsr:4,planner:3,tendering:5,consultant:3},
+  pme:{fsr:3,planner:3,tendering:5,consultant:4},
+  epo:{fsr:3,planner:3,tendering:5,consultant:4},
+  edge:{fsr:3,planner:3,tendering:5,consultant:3},
+  epas:{fsr:3,planner:2,tendering:5,consultant:4},
+  lv_protection:{fsr:4,planner:3,tendering:5,consultant:2},
+  mv:{fsr:3,planner:3,tendering:5,consultant:3},
+  ecostruxure_power:{fsr:4,planner:2,tendering:5,consultant:2},
+  plc:{fsr:4,planner:2,tendering:5,consultant:2},
+  drives:{fsr:4,planner:2,tendering:4,consultant:2},
+  scada_ind:{fsr:3,planner:3,tendering:5,consultant:5},
+  ebo:{fsr:4,planner:3,tendering:5,consultant:3},
+  hvac_ctrl:{fsr:2,planner:2,tendering:5,consultant:2},
+  energy_bld:{fsr:2,planner:3,tendering:4,consultant:5},
+  ups:{fsr:4,planner:3,tendering:5,consultant:3},
+  dcim:{fsr:3,planner:3,tendering:5,consultant:5},
+  pdu_racks:{fsr:3,planner:3,tendering:5,consultant:2},
+  precision_cooling:{fsr:4,planner:3,tendering:5,consultant:2},
+  chillers:{fsr:3,planner:3,tendering:5,consultant:4},
+  pue_liquid:{fsr:2,planner:3,tendering:5,consultant:5}
+};
+
+const TREES = {
+  dp:{name:"Digital Power",subs:[
+    {id:"metering",label:{es:"Medida (PM5000/PM8000/ION9000/iEM3000)",en:"Metering (PM5000/PM8000/ION9000/iEM3000)"},qs:[
+      {id:"dp_m1",lv:1,axis:"operation",t:{es:"¿Has oído hablar de la gama de medidores PowerLogic de Schneider (PM5000, PM8000, ION9000, iEM3000)?",en:"Have you heard of the Schneider PowerLogic meter range (PM5000, PM8000, ION9000, iEM3000)?"},yes:"dp_m1b",nsc:0},
+      {id:"dp_m1b",lv:1,axis:"operation",t:{es:"¿Puedes explicar la diferencia entre el PM5000 y el iEM3000? (uno tiene pantalla y comunicaciones avanzadas; el otro es compacto sin pantalla para subcuadros con Modbus RTU básico)",en:"Can you explain the main difference between PM5000 and iEM3000? (one has display and advanced comms; the other is compact without display for sub-boards with basic Modbus RTU)"},yes:"dp_m1c",nsc:0},
+      {id:"dp_m1c",lv:1,axis:"operation",t:{es:"¿Sabes cuándo se especifica un ION9000 en lugar de un PM8000? (clase A IEC 61000-4-30, obligatorio para contratos de calidad de red o facturación certificada)",en:"Do you know when an ION9000 is specified instead of a PM8000? (class A per IEC 61000-4-30, required for power quality contracts or certified billing)"},yes:"dp_m2",nsc:0},
+      {id:"dp_m2",lv:2,axis:"operation",t:{es:"¿Has instalado físicamente alguno de estos medidores en campo?",en:"Have you physically installed any of these meters in the field?"},yes:"dp_m2b",nsc:1},
+      {id:"dp_m2b",lv:2,axis:"operation",t:{es:"¿Ajustaste relaciones de transformación de TCs/TTs, verificaste el sentido de la energía (importación/exportación) y comprobaste el desfase de fase durante la instalación?",en:"Did you adjust CT/VT ratios, verify energy direction (import/export) and check phase shift during installation?"},yes:"dp_m3",nsc:1},
+      {id:"dp_m3",lv:3,axis:"configuration",t:{es:"¿Has configurado comunicaciones en medidores PM o ION para enviar datos a un sistema de supervisión?",en:"Have you configured communications on PM or ION meters to send data to a supervision system?"},yes:"dp_m3b",nsc:2},
+      {id:"dp_m3b",lv:3,axis:"configuration",t:{es:"¿Configuraste Modbus TCP/IP en un PM8000 o Modbus RTU en un iEM3000 especificando dirección esclava, velocidad de baudios y mapa de registros para integración con PME o SCADA?",en:"Did you configure Modbus TCP/IP on a PM8000 or Modbus RTU on an iEM3000, specifying slave address, baud rate and register map for PME or SCADA integration?"},yes:"dp_m4",nsc:2},
+      {id:"dp_m4",lv:3,axis:"configuration",t:{es:"¿Has configurado parámetros de calidad de red en un PM8000 o ION9000?",en:"Have you configured power quality parameters on a PM8000 or ION9000?"},yes:"dp_m4b",nsc:2},
+      {id:"dp_m4b",lv:3,axis:"configuration",t:{es:"¿Ajustaste umbrales de THD, desequilibrio de tensión o configuraste registros de perturbaciones (sags/swells) con límites EN 50160?",en:"Did you set THD thresholds, voltage unbalance or configure disturbance records (sags/swells) against EN 50160 limits?"},yes:"dp_m5",nsc:2},
+      {id:"dp_m5",lv:4,axis:"diagnosis",t:{es:"¿Has utilizado registros de ION9000 o PM8000 para resolver un problema real de calidad de red?",en:"Have you used ION9000 or PM8000 records to resolve a real power quality problem?"},yes:"dp_m5b",nsc:3},
+      {id:"dp_m5b",lv:4,axis:"diagnosis",t:{es:"¿Puedes describir qué tipo de problema encontraste y qué datos del medidor usaste? (ej. armónicos de orden 5/7 por variadores, sag correlacionado con arranque de motor, flicker por soldadoras)",en:"Can you describe what problem you found and which meter data you used? (e.g. 5th/7th harmonics from drives, sag correlated with motor start, flicker from welding)"},yes:"dp_m6",nsc:3},
+      {id:"dp_m6",lv:5,axis:"design",t:{es:"¿Has diseñado la arquitectura completa de un sistema de medida para una instalación?",en:"Have you designed the complete metering system architecture for a facility?"},yes:"dp_m6b",nsc:4},
+      {id:"dp_m6b",lv:5,axis:"design",t:{es:"¿Definiste la jerarquía de medidores por nivel (acometida → cuadro general → subcuadros → cargas críticas), seleccionaste la clase de precisión IEC 62053-22 requerida y calculaste los puntos de medida para cerrar el balance energético?",en:"Did you define the meter hierarchy by level (incomer → main board → sub-boards → critical loads), select the required IEC 62053-22 accuracy class and calculate measurement points to close the energy balance?"},yes:null,nsc:4,ysc:5}
+    ]},
+    {id:"pme",label:{es:"PME — Power Monitoring Expert",en:"PME — Power Monitoring Expert"},qs:[
+      {id:"dp_pme1",lv:1,axis:"digitalization",t:{es:"¿Conoces EcoStruxure Power Monitoring Expert (PME) y sabes diferenciarlo de EPO?",en:"Do you know EcoStruxure Power Monitoring Expert (PME) and can you differentiate it from EPO?"},yes:"dp_pme1b",nsc:0},
+      {id:"dp_pme1b",lv:1,axis:"digitalization",t:{es:"¿Puedes explicar para qué tipo de instalación se usa PME? (gestión de energía en edificios e industria, informes de consumo y calidad de red — no SCADA eléctrico en tiempo real)",en:"Can you explain what installation type PME is used for? (energy management in buildings and industry, consumption and PQ reports — not real-time electrical SCADA)"},yes:"dp_pme2",nsc:0},
+      {id:"dp_pme2",lv:2,axis:"operation",t:{es:"¿Has usado PME activamente para monitorizar una red eléctrica, gestionar alarmas o generar informes de energía?",en:"Have you actively used PME to monitor an electrical network, manage alarms or generate energy reports?"},yes:"dp_pme2b",nsc:1},
+      {id:"dp_pme2b",lv:2,axis:"operation",t:{es:"¿Sabes cómo añadir un nuevo dispositivo en PME configurando su driver, dirección IP y mapa de registros para que aparezca en los dashboards?",en:"Do you know how to add a new device in PME by configuring its driver, IP address and register map so it appears on dashboards?"},yes:"dp_pme3",nsc:1},
+      {id:"dp_pme3",lv:3,axis:"configuration",t:{es:"¿Has configurado elementos avanzados en PME: dashboards personalizados, módulos de calidad de energía o informes automáticos?",en:"Have you configured advanced elements in PME: custom dashboards, power quality modules or automatic reports?"},yes:"dp_pme3b",nsc:2},
+      {id:"dp_pme3b",lv:3,axis:"configuration",t:{es:"¿Has usado el módulo ION Technology o el editor de diagramas de PME para crear lógicas de cálculo de KPIs personalizados (ej. coste por área, factor de carga, índice de calidad de red)?",en:"Have you used PME's ION Technology module or diagram editor to create custom KPI calculation logic (e.g. cost per area, load factor, PQ index)?"},yes:"dp_pme4",nsc:2},
+      {id:"dp_pme4",lv:5,axis:"design",t:{es:"¿Has liderado el diseño e implementación completa de un sistema PME para un cliente (arquitectura, licenciamiento, integración, puesta en marcha y formación)?",en:"Have you led the complete design and implementation of a PME system for a client (architecture, licensing, integration, commissioning and training)?"},yes:"dp_pme4b",nsc:3},
+      {id:"dp_pme4b",lv:5,axis:"design",t:{es:"¿Definiste la arquitectura de redundancia, el plan de migración desde un sistema anterior y la estrategia de integración con otros sistemas (SCADA, ERP, BMS)?",en:"Did you define the redundancy architecture, migration plan from a previous system and integration strategy with other systems (SCADA, ERP, BMS)?"},yes:null,nsc:4,ysc:5}
+    ]},
+    {id:"epo",label:{es:"EPO — EcoStruxure Power Operation",en:"EPO — EcoStruxure Power Operation"},qs:[
+      {id:"dp_epo1",lv:1,axis:"digitalization",t:{es:"¿Conoces EcoStruxure Power Operation (EPO) como plataforma SCADA eléctrico? ¿Sabes en qué se diferencia de PME?",en:"Do you know EcoStruxure Power Operation (EPO) as electrical SCADA platform? Do you know how it differs from PME?"},yes:"dp_epo1b",nsc:0},
+      {id:"dp_epo1b",lv:1,axis:"digitalization",t:{es:"¿Puedes describir un caso de uso típico de EPO? (SCADA eléctrico en tiempo real para instalaciones críticas: CPD, plantas, transporte, utilities — con control de maniobras)",en:"Can you describe a typical EPO use case? (real-time electrical SCADA for critical facilities: DC, plants, transport, utilities — with switching control)"},yes:"dp_epo2",nsc:0},
+      {id:"dp_epo2",lv:2,axis:"operation",t:{es:"¿Has trabajado activamente con EPO en un proyecto o instalación real?",en:"Have you actively worked with EPO on a real project or installation?"},yes:"dp_epo2b",nsc:1},
+      {id:"dp_epo2b",lv:2,axis:"operation",t:{es:"¿Has navegado por single-lines eléctricos, reconocido alarmas activas y ejecutado órdenes de maniobra (apertura/cierre de interruptores) desde EPO?",en:"Have you navigated electrical single-lines, acknowledged active alarms and executed switching orders (open/close breakers) from EPO?"},yes:"dp_epo3",nsc:1},
+      {id:"dp_epo3",lv:3,axis:"configuration",t:{es:"¿Has configurado elementos en EPO: single-lines, drivers de dispositivos o lógicas de automatización eléctrica?",en:"Have you configured elements in EPO: single-lines, device drivers or electrical automation logic?"},yes:"dp_epo3b",nsc:2},
+      {id:"dp_epo3b",lv:3,axis:"configuration",t:{es:"¿Has configurado análisis DDD o LLD en EPO, o integrado relés de protección vía IEC 61850/GOOSE?",en:"Have you configured DDD or LLD analysis in EPO, or integrated protection relays via IEC 61850/GOOSE?"},yes:"dp_epo4",nsc:2},
+      {id:"dp_epo4",lv:5,axis:"design",t:{es:"¿Has diseñado una arquitectura EPO completa para un cliente?",en:"Have you designed a complete EPO architecture for a client?"},yes:"dp_epo4b",nsc:3},
+      {id:"dp_epo4b",lv:5,axis:"design",t:{es:"¿Definiste la topología de servidores, la estrategia de ciberseguridad IEC 62443 (zonas y conductos), la integración de protocolos (IEC 61850, Modbus, DNP3) y el plan de recuperación ante fallos?",en:"Did you define server topology, IEC 62443 cybersecurity strategy (zones and conduits), protocol integration (IEC 61850, Modbus, DNP3) and failure recovery plan?"},yes:null,nsc:4,ysc:5}
+    ]},
+    {id:"edge",label:{es:"Edge & Comunicaciones (PowerTag, Panel Server)",en:"Edge & Communications (PowerTag, Panel Server)"},qs:[
+      {id:"dp_e1",lv:1,axis:"integration",t:{es:"¿Conoces los sensores PowerTag y el concentrador Link150 de Schneider para medida inalámbrica en cuadros BT?",en:"Do you know Schneider PowerTag sensors and Link150 concentrator for wireless metering in LV boards?"},yes:"dp_e1b",nsc:0},
+      {id:"dp_e1b",lv:1,axis:"integration",t:{es:"¿Puedes explicar cómo funciona el ecosistema PowerTag? (sensores → Link150/Panel Server → Modbus TCP o Wi-Fi → PME/BMS/cloud)",en:"Can you explain how the PowerTag ecosystem works? (sensors → Link150/Panel Server → Modbus TCP or Wi-Fi → PME/BMS/cloud)"},yes:"dp_e2",nsc:0},
+      {id:"dp_e2",lv:2,axis:"integration",t:{es:"¿Has instalado o configurado PowerTag + Link150 o EcoStruxure Panel Server en campo en un proyecto real?",en:"Have you installed or configured PowerTag + Link150 or EcoStruxure Panel Server in the field on a real project?"},yes:"dp_e2b",nsc:1},
+      {id:"dp_e2b",lv:2,axis:"integration",t:{es:"¿Asociaste los PowerTag al Link150/Panel Server, configuraste la comunicación hacia PME y verificaste la correcta lectura de datos de energía en el sistema de supervisión?",en:"Did you associate PowerTags to the Link150/Panel Server, configure communication to PME and verify correct energy data in the supervision system?"},yes:"dp_e3",nsc:1},
+      {id:"dp_e3",lv:3,axis:"configuration",t:{es:"¿Has configurado protocolos industriales (Modbus TCP, IEC 61850, SNMP u OPC UA) en gateways o Panel Server para integrar dispositivos con SCADA o PME/EPO?",en:"Have you configured industrial protocols (Modbus TCP, IEC 61850, SNMP or OPC UA) on gateways or Panel Server for SCADA or PME/EPO integration?"},yes:"dp_e3b",nsc:2},
+      {id:"dp_e3b",lv:3,axis:"configuration",t:{es:"¿Has resuelto algún problema de integración de protocolos? (ej. mapeo de registros Modbus incorrecto, timeout de comunicación, conflicto de IPs, configuración SNMP v3)",en:"Have you resolved a protocol integration problem? (e.g. incorrect Modbus register mapping, comms timeout, IP conflict, SNMP v3 configuration)"},yes:"dp_e4",nsc:2},
+      {id:"dp_e4",lv:5,axis:"design",t:{es:"¿Has diseñado una arquitectura completa de integración end-to-end para un proyecto?",en:"Have you designed a complete end-to-end integration architecture for a project?"},yes:"dp_e4b",nsc:3},
+      {id:"dp_e4b",lv:5,axis:"design",t:{es:"¿Seleccionaste el protocolo adecuado para cada tramo, definiste segmentación de red (VLANs), estableciste políticas de ciberseguridad y documentaste el mapa de integración completo?",en:"Did you select the right protocol for each segment, define network segmentation (VLANs), establish cybersecurity policies and document the complete integration map?"},yes:null,nsc:4,ysc:5}
+    ]},
+    {id:"epas",label:{es:"EPAS — EcoStruxure Power Automation System",en:"EPAS — EcoStruxure Power Automation System"},qs:[
+      {id:"dp_epas1",lv:1,axis:"digitalization",t:{es:"¿Conoces EcoStruxure Power Automation System (EPAS) como plataforma de automatización de potencia para utilities e infraestructura crítica?",en:"Do you know EcoStruxure Power Automation System (EPAS) as power automation platform for utilities and critical infrastructure?"},yes:"dp_epas1b",nsc:0},
+      {id:"dp_epas1b",lv:1,axis:"digitalization",t:{es:"¿Puedes diferenciar EPAS de EPO? (EPAS es para utilities y automatización de red de distribución con RTUs e IEDs; EPO es SCADA eléctrico para plantas industriales y edificios)",en:"Can you differentiate EPAS from EPO? (EPAS targets utilities and distribution network automation with RTUs and IEDs; EPO is electrical SCADA for industrial plants and buildings)"},yes:"dp_epas2",nsc:0},
+      {id:"dp_epas2",lv:2,axis:"operation",t:{es:"¿Has trabajado con EPAS en proyectos reales y conoces sus componentes (RTUs, IEDs, WebHMI, EPAS-UI)?",en:"Have you worked with EPAS in real projects and know its components (RTUs, IEDs, WebHMI, EPAS-UI)?"},yes:"dp_epas2b",nsc:1},
+      {id:"dp_epas2b",lv:2,axis:"operation",t:{es:"¿Puedes describir el flujo de datos en EPAS desde los IEDs de campo hasta la visualización en WebHMI, incluyendo el papel del RTU como concentrador?",en:"Can you describe the data flow in EPAS from field IEDs to WebHMI visualization, including the RTU's role as concentrator?"},yes:"dp_epas3",nsc:1},
+      {id:"dp_epas3",lv:3,axis:"configuration",t:{es:"¿Has configurado EPAS-UI o WebHMI Tools para sinópticos, lógicas de automatización o gestión de eventos?",en:"Have you configured EPAS-UI or WebHMI Tools for synoptics, automation logic or event management?"},yes:"dp_epas3b",nsc:2},
+      {id:"dp_epas3b",lv:3,axis:"configuration",t:{es:"¿Has configurado comunicaciones IEC 61850 o DNP3 entre EPAS y los IEDs de campo, incluyendo importación de archivos SCL/SCD?",en:"Have you configured IEC 61850 or DNP3 communications between EPAS and field IEDs, including SCL/SCD file import?"},yes:"dp_epas4",nsc:2},
+      {id:"dp_epas4",lv:4,axis:"diagnosis",t:{es:"¿Has realizado troubleshooting en sistemas EPAS en producción (pérdida de IEDs, fallos de sincronización, lógicas con comportamiento inesperado)?",en:"Have you performed troubleshooting on EPAS systems in production (IED loss, sync failures, unexpected logic behaviour)?"},yes:"dp_epas4b",nsc:3},
+      {id:"dp_epas4b",lv:4,axis:"diagnosis",t:{es:"¿Qué herramientas usaste para identificar el problema? (ej. logs del RTU, análisis de tramas IEC 61850 con Wireshark, revisión de lógicas en EPAS-UI)",en:"What tools did you use to identify the problem? (e.g. RTU logs, IEC 61850 frame analysis with Wireshark, logic review in EPAS-UI)"},yes:"dp_epas5",nsc:3},
+      {id:"dp_epas5",lv:5,axis:"design",t:{es:"¿Has diseñado e implementado una arquitectura EPAS completa con ciberseguridad IEC 62443?",en:"Have you designed and implemented a complete EPAS architecture with IEC 62443 cybersecurity?"},yes:"dp_epas5b",nsc:4},
+      {id:"dp_epas5b",lv:5,axis:"design",t:{es:"¿Aplicaste el modelo de zonas y conductos IEC 62443, definiste niveles de seguridad (SL) para cada zona e implementaste segmentación de red, autenticación fuerte y cifrado de comunicaciones?",en:"Did you apply the IEC 62443 zones and conduits model, define security levels (SL) for each zone and implement network segmentation, strong authentication and comms encryption?"},yes:null,nsc:4,ysc:5}
+    ]}
+  ]},
+  pw:{name:"Power",subs:[
+    {id:"lv_protection",label:{es:"Protecciones BT (MTZ, NSX, MicroLogic)",en:"LV Protection (MTZ, NSX, MicroLogic)"},qs:[
+      {id:"pw_lv1",lv:1,axis:"operation",t:{es:"¿Conoces la gama Schneider: MasterpacT MTZ (hasta 6300 A), ComPacT NSX/NS y unidades MicroLogic X?",en:"Do you know the Schneider range: MasterpacT MTZ (up to 6300 A), ComPacT NSX/NS and MicroLogic X trip units?"},yes:"pw_lv1b",nsc:0},
+      {id:"pw_lv1b",lv:1,axis:"operation",t:{es:"¿Puedes explicar cuándo se usa un MTZ frente a un NSX? (MTZ para cabeceras de alta intensidad hasta 6300A; NSX para protección de salidas y motores hasta 630A)",en:"Can you explain when to use an MTZ vs an NSX? (MTZ for high-current incomers up to 6300A; NSX for outgoing and motor protection up to 630A)"},yes:"pw_lv2",nsc:0},
+      {id:"pw_lv2",lv:2,axis:"operation",t:{es:"¿Has trabajado en campo con MasterpacT MTZ o ComPacT NSX (instalación, puesta en marcha, mantenimiento preventivo)?",en:"Have you worked in the field with MasterpacT MTZ or ComPacT NSX (installation, commissioning, preventive maintenance)?"},yes:"pw_lv2b",nsc:1},
+      {id:"pw_lv2b",lv:2,axis:"operation",t:{es:"¿Has realizado la prueba de disparo con equipo de inyección de corriente y verificado los ajustes de la unidad MicroLogic antes de energizar un cuadro?",en:"Have you performed a trip test with current injection equipment and verified MicroLogic unit settings before energizing a switchboard?"},yes:"pw_lv3",nsc:1},
+      {id:"pw_lv3",lv:3,axis:"configuration",t:{es:"¿Has parametrizado unidades MicroLogic X (ajuste de curvas LSI/LSIG, protecciones diferenciales, módulos digitales descargables)?",en:"Have you parametrized MicroLogic X units (LSI/LSIG curve adjustment, differential protection, downloadable digital modules)?"},yes:"pw_lv3b",nsc:2},
+      {id:"pw_lv3b",lv:3,axis:"configuration",t:{es:"¿Has configurado la unidad MicroLogic X para comunicación Modbus a través del módulo IFE o EIFE, verificando el correcto mapeo de registros de estado y medida del interruptor?",en:"Have you configured the MicroLogic X unit for Modbus communication via IFE or EIFE module, verifying correct register mapping for breaker status and measurement?"},yes:"pw_lv4",nsc:2},
+      {id:"pw_lv4",lv:4,axis:"diagnosis",t:{es:"¿Has diagnosticado fallos reales: disparos intempestivos, problemas de selectividad o coordinación de protecciones?",en:"Have you diagnosed real faults: nuisance tripping, selectivity or protection coordination problems?"},yes:"pw_lv4b",nsc:3},
+      {id:"pw_lv4b",lv:4,axis:"diagnosis",t:{es:"¿Puedes describir un caso real de disparo intempestivo que hayas resuelto: qué información del registro de fallos de la MicroLogic usaste y qué ajuste corrigió el problema?",en:"Can you describe a real nuisance trip you resolved: what information from the MicroLogic fault record did you use and what adjustment fixed the problem?"},yes:"pw_lv5",nsc:3},
+      {id:"pw_lv5",lv:5,axis:"design",t:{es:"¿Has realizado estudios de coordinación de protecciones o especificado cuadros de distribución BT completos para un cliente?",en:"Have you carried out protection coordination studies or specified complete LV distribution switchgear for a client?"},yes:"pw_lv5b",nsc:4},
+      {id:"pw_lv5b",lv:5,axis:"design",t:{es:"¿Usaste herramientas como EcoStruxure Power Design o similares para verificar la selectividad total o energética entre niveles de protección y validaste los resultados con curvas de disparo?",en:"Did you use tools like EcoStruxure Power Design or similar to verify total or energy-based selectivity between protection levels and validate results with trip curves?"},yes:null,nsc:4,ysc:5}
+    ]},
+    {id:"mv",label:{es:"Media Tensión (SM6, RM6, PIX)",en:"Medium Voltage (SM6, RM6, PIX)"},qs:[
+      {id:"pw_mv1",lv:1,axis:"operation",t:{es:"¿Conoces la aparamenta MT Schneider (SM6, RM6, PIX, celdas de 6 a 36 kV) y sus relés de protección?",en:"Do you know Schneider MV switchgear (SM6, RM6, PIX, 6–36 kV cells) and their protection relays?"},yes:"pw_mv1b",nsc:0},
+      {id:"pw_mv1b",lv:1,axis:"operation",t:{es:"¿Puedes explicar la diferencia entre una celda SM6 y una RM6? (SM6 es modular para subestaciones de cliente; RM6 es compacta todo-en-uno para redes de distribución)",en:"Can you explain the difference between SM6 and RM6 cells? (SM6 is modular for client substations; RM6 is compact all-in-one for distribution networks)"},yes:"pw_mv2",nsc:0},
+      {id:"pw_mv2",lv:2,axis:"operation",t:{es:"¿Has trabajado en instalaciones MT en campo (puesta en servicio, maniobras, mantenimiento)?",en:"Have you worked on MV installations in field (commissioning, switching operations, maintenance)?"},yes:"pw_mv2b",nsc:1},
+      {id:"pw_mv2b",lv:2,axis:"operation",t:{es:"¿Has ejecutado procedimientos de consignación (LOTO) en instalaciones MT y realizado mediciones de aislamiento o pruebas de relés de protección en campo?",en:"Have you executed lockout/tagout (LOTO) procedures on MV installations and performed insulation measurements or protection relay tests in the field?"},yes:"pw_mv3",nsc:1},
+      {id:"pw_mv3",lv:5,axis:"design",t:{es:"¿Has dimensionado o especificado un centro de transformación o subestación MT completa (celdas, transformadores, protecciones, unifilar)?",en:"Have you sized or specified a complete transformer center or MV substation (cells, transformers, protection, single-line diagram)?"},yes:"pw_mv3b",nsc:2},
+      {id:"pw_mv3b",lv:5,axis:"design",t:{es:"¿Calculaste las corrientes de cortocircuito, seleccionaste los fusibles o relés de protección en función de las curvas de daño del transformador y verificaste la coordinación entre la protección MT y los interruptores BT aguas abajo?",en:"Did you calculate short-circuit currents, select fuses or protection relays based on transformer damage curves and verify coordination between MV protection and downstream LV breakers?"},yes:null,nsc:3,ysc:5}
+    ]},
+    {id:"ecostruxure_power",label:{es:"EcoStruxure Power Commission & Enerlin'X",en:"EcoStruxure Power Commission & Enerlin'X"},qs:[
+      {id:"pw_ep1",lv:1,axis:"digitalization",t:{es:"¿Conoces EcoStruxure Power Commission y los módulos Enerlin'X (IFE, FDM, IFM) para digitalizar cuadros de distribución?",en:"Do you know EcoStruxure Power Commission and Enerlin'X modules (IFE, FDM, IFM) for smart distribution boards?"},yes:"pw_ep1b",nsc:0},
+      {id:"pw_ep1b",lv:1,axis:"digitalization",t:{es:"¿Sabes qué función cumple cada módulo Enerlin'X? (IFE = Ethernet gateway para MTZ; IFM = módulo fieldbus para NSX; FDM = display local de datos del interruptor)",en:"Do you know what each Enerlin'X module does? (IFE = Ethernet gateway for MTZ; IFM = fieldbus module for NSX; FDM = local display for breaker data)"},yes:"pw_ep2",nsc:0},
+      {id:"pw_ep2",lv:3,axis:"configuration",t:{es:"¿Has configurado comunicación Modbus TCP/Ethernet en interruptores MTZ o NSX vía módulos IFE/EIFE o IFM?",en:"Have you configured Modbus TCP/Ethernet on MTZ or NSX breakers via IFE/EIFE or IFM modules?"},yes:"pw_ep2b",nsc:1},
+      {id:"pw_ep2b",lv:3,axis:"configuration",t:{es:"¿Usaste EcoStruxure Power Commission para configurar y verificar los parámetros de comunicación de los interruptores (dirección IP, mapa de registros, alarmas) antes de integrarlos en PME o EPO?",en:"Did you use EcoStruxure Power Commission to configure and verify breaker communication parameters (IP address, register map, alarms) before integrating them into PME or EPO?"},yes:"pw_ep3",nsc:2},
+      {id:"pw_ep3",lv:5,axis:"integration",t:{es:"¿Has integrado un cuadro inteligente completo (MTZ + Enerlin'X + PME/EPO) con gestión de alarmas y datos en tiempo real?",en:"Have you integrated a complete smart board (MTZ + Enerlin'X + PME/EPO) with real-time alarm and data management?"},yes:"pw_ep3b",nsc:3},
+      {id:"pw_ep3b",lv:5,axis:"integration",t:{es:"¿Validaste end-to-end que los estados y medidas de cada interruptor (posición, corriente, energía, alarmas de disparo) llegaban correctamente al sistema de supervisión y se representaban en el single-line?",en:"Did you validate end-to-end that each breaker's states and measurements (position, current, energy, trip alarms) were correctly reaching the supervision system and represented on the single-line?"},yes:null,nsc:4,ysc:5}
+    ]}
+  ]},
+  ind:{name:"Industry",subs:[
+    {id:"plc",label:{es:"PLCs & Control (Modicon M340/M580/M262)",en:"PLCs & Control (Modicon M340/M580/M262)"},qs:[
+      {id:"ind_p1",lv:1,axis:"operation",t:{es:"¿Conoces los PLCs/PACs Modicon (M340, M580, M262) y sus diferencias de arquitectura?",en:"Do you know Modicon PLCs/PACs (M340, M580, M262) and their architecture differences?"},yes:"ind_p1b",nsc:0},
+      {id:"ind_p1b",lv:1,axis:"operation",t:{es:"¿Puedes explicar en qué se diferencia el M580 del M340? (M580 tiene procesador Ethernet nativo, mayor capacidad de I/O, Hot Standby y soporte de racks remotos; M340 es compacto para máquinas)",en:"Can you explain how M580 differs from M340? (M580 has native Ethernet CPU, higher I/O capacity, Hot Standby and remote rack support; M340 is compact for machines)"},yes:"ind_p2",nsc:0},
+      {id:"ind_p2",lv:2,axis:"configuration",t:{es:"¿Has programado PLCs Modicon con EcoStruxure Control Expert (Unity Pro) en lenguajes IEC 61131-3?",en:"Have you programmed Modicon PLCs with EcoStruxure Control Expert (Unity Pro) in IEC 61131-3 languages?"},yes:"ind_p2b",nsc:1},
+      {id:"ind_p2b",lv:2,axis:"configuration",t:{es:"¿Has creado secciones de programa en LD (Ladder) o FBD (Function Block Diagram), gestionado variables globales y descargado el proyecto en el PLC verificando su correcta ejecución?",en:"Have you created program sections in LD (Ladder) or FBD, managed global variables and downloaded the project to the PLC verifying correct execution?"},yes:"ind_p3",nsc:1},
+      {id:"ind_p3",lv:3,axis:"integration",t:{es:"¿Has configurado redes industriales en Modicon: Ethernet/IP, Profibus DP, Modbus TCP o CANopen?",en:"Have you configured industrial networks on Modicon: Ethernet/IP, Profibus DP, Modbus TCP or CANopen?"},yes:"ind_p3b",nsc:2},
+      {id:"ind_p3b",lv:3,axis:"integration",t:{es:"¿Configuraste un scanner Ethernet/IP o maestro Profibus en Control Expert, añadiste los esclavos/adaptadores con sus archivos EDS/GSD y verificaste el intercambio de I/O en tiempo real?",en:"Did you configure an Ethernet/IP scanner or Profibus master in Control Expert, add slaves/adapters with their EDS/GSD files and verify real-time I/O exchange?"},yes:"ind_p4",nsc:2},
+      {id:"ind_p4",lv:4,axis:"diagnosis",t:{es:"¿Has diagnosticado fallos en sistemas Modicon en producción: pérdida de I/O, errores de comunicación, corrupción de programa?",en:"Have you diagnosed faults in Modicon systems in production: I/O loss, comms errors, program corruption?"},yes:"ind_p4b",nsc:3},
+      {id:"ind_p4b",lv:4,axis:"diagnosis",t:{es:"¿Usaste el modo online de Control Expert para monitorizar variables en tiempo real, identificar el módulo I/O con fallo y determinar si el problema era hardware, firmware o de red?",en:"Did you use Control Expert online mode to monitor variables in real time, identify the failing I/O module and determine if the problem was hardware, firmware or network?"},yes:"ind_p5",nsc:3},
+      {id:"ind_p5",lv:5,axis:"design",t:{es:"¿Has diseñado arquitecturas de automatización industrial completas (control + SCADA + fieldbus + seguridad funcional)?",en:"Have you designed complete industrial automation architectures (control + SCADA + fieldbus + functional safety)?"},yes:"ind_p5b",nsc:4},
+      {id:"ind_p5b",lv:5,axis:"design",t:{es:"¿Definiste la topología de red (anillo/estrella), seleccionaste los PLCs y I/O por rendimiento y disponibilidad requerida, diseñaste la arquitectura de redundancia (Hot Standby) y documentaste el plan de seguridad funcional (SIL)?",en:"Did you define network topology (ring/star), select PLCs and I/O by required performance and availability, design redundancy architecture (Hot Standby) and document the functional safety plan (SIL)?"},yes:null,nsc:4,ysc:5}
+    ]},
+    {id:"drives",label:{es:"Variadores Altivar (ATV320/ATV600/ATV900)",en:"Altivar Drives (ATV320/ATV600/ATV900)"},qs:[
+      {id:"ind_d1",lv:1,axis:"operation",t:{es:"¿Conoces los variadores Altivar (ATV320, ATV600, ATV900) y sus aplicaciones típicas?",en:"Do you know Altivar drives (ATV320, ATV600, ATV900) and their typical applications?"},yes:"ind_d1b",nsc:0},
+      {id:"ind_d1b",lv:1,axis:"operation",t:{es:"¿Puedes explicar cuándo se usa un ATV320 vs un ATV600? (ATV320 para máquinas compactas hasta 15kW; ATV600 para procesos con bomba/ventilador hasta 630kW con gestión energética avanzada)",en:"Can you explain when to use an ATV320 vs ATV600? (ATV320 for compact machines up to 15kW; ATV600 for pump/fan processes up to 630kW with advanced energy management)"},yes:"ind_d2",nsc:0},
+      {id:"ind_d2",lv:2,axis:"configuration",t:{es:"¿Has puesto en marcha variadores Altivar en campo (parametrización, rampas, protecciones del motor, fieldbus)?",en:"Have you commissioned Altivar drives in the field (parameterization, ramps, motor protection, fieldbus)?"},yes:"ind_d2b",nsc:1},
+      {id:"ind_d2b",lv:2,axis:"configuration",t:{es:"¿Realizaste el autoajuste del motor (auto-tune) en un ATV, configuraste las rampas de aceleración/deceleración según la inercia de la carga y ajustaste las protecciones de sobreintensidad y sobretemperatura?",en:"Did you perform motor auto-tune on an ATV, configure acceleration/deceleration ramps based on load inertia and adjust overcurrent and overtemperature protection settings?"},yes:"ind_d3",nsc:1},
+      {id:"ind_d3",lv:4,axis:"diagnosis",t:{es:"¿Has diagnosticado averías de variadores en producción (sobrecargas, sobretemperaturas, fallos de comunicación)?",en:"Have you diagnosed drive faults in production (overloads, overtemperature, comms failures)?"},yes:"ind_d3b",nsc:2},
+      {id:"ind_d3b",lv:4,axis:"diagnosis",t:{es:"¿Leíste el histórico de fallos del ATV para identificar el código de error, correlacionaste el fallo con las condiciones de proceso (carga, temperatura ambiente, ciclo de trabajo) y determinaste la causa raíz?",en:"Did you read the ATV fault history to identify the error code, correlate the fault with process conditions (load, ambient temperature, duty cycle) and determine the root cause?"},yes:"ind_d4",nsc:3},
+      {id:"ind_d4",lv:5,axis:"design",t:{es:"¿Has dimensionado y seleccionado variadores Altivar para proyectos (potencia, par, red de comunicación, IP, frenado)?",en:"Have you sized and selected Altivar drives for projects (power, torque, comms network, IP rating, braking)?"},yes:"ind_d4b",nsc:4},
+      {id:"ind_d4b",lv:5,axis:"design",t:{es:"¿Calculaste la potencia del variador considerando el ciclo de trabajo, el par de arranque requerido y la curva par-velocidad de la carga, seleccionaste la opción de frenado (resistencia o unidad de frenado) y especificaste el grado IP según el entorno?",en:"Did you calculate drive power considering duty cycle, required starting torque and load torque-speed curve, select the braking option (resistor or braking unit) and specify IP rating based on environment?"},yes:null,nsc:4,ysc:5}
+    ]},
+    {id:"scada_ind",label:{es:"SCADA Industrial & EcoStruxure Automation Expert",en:"Industrial SCADA & EcoStruxure Automation Expert"},qs:[
+      {id:"ind_s1",lv:1,axis:"digitalization",t:{es:"¿Conoces herramientas SCADA/HMI industriales como EcoStruxure Automation Expert, Vijeo Citect o AVEVA?",en:"Do you know industrial SCADA/HMI tools like EcoStruxure Automation Expert, Vijeo Citect or AVEVA?"},yes:"ind_s1b",nsc:0},
+      {id:"ind_s1b",lv:1,axis:"digitalization",t:{es:"¿Puedes explicar qué aporta EcoStruxure Automation Expert frente a un SCADA tradicional? (arquitectura software-defined, independiente del hardware, con objetos de automatización reutilizables y despliegue en cloud/edge)",en:"Can you explain what EcoStruxure Automation Expert adds vs traditional SCADA? (software-defined architecture, hardware-independent, with reusable automation objects and cloud/edge deployment)"},yes:"ind_s2",nsc:0},
+      {id:"ind_s2",lv:3,axis:"configuration",t:{es:"¿Has configurado SCADA industrial con drivers OPC-UA, gestión de alarmas, historian y reporting de producción?",en:"Have you configured industrial SCADA with OPC-UA drivers, alarm management, historian and production reporting?"},yes:"ind_s2b",nsc:1},
+      {id:"ind_s2b",lv:3,axis:"configuration",t:{es:"¿Creaste un servidor OPC-UA en el SCADA, configuraste los nodos de datos desde los PLCs, definiste las alarmas con prioridades y grupos, y configuraste el historian con la política de retención de datos?",en:"Did you create an OPC-UA server in the SCADA, configure data nodes from PLCs, define alarms with priorities and groups, and configure the historian with data retention policy?"},yes:"ind_s3",nsc:2},
+      {id:"ind_s3",lv:5,axis:"design",t:{es:"¿Has diseñado una arquitectura IIoT completa (PLC → edge → MES/ERP) con gestión de datos en tiempo real?",en:"Have you designed a complete IIoT architecture (PLC → edge → MES/ERP) with real-time data management?"},yes:"ind_s3b",nsc:3},
+      {id:"ind_s3b",lv:5,axis:"design",t:{es:"¿Definiste el modelo de datos unificado (Unified Namespace), seleccionaste el broker de mensajería (MQTT/Sparkplug B), diseñaste la segmentación IT/OT y estableciste los SLAs de latencia y disponibilidad para cada nivel de la arquitectura?",en:"Did you define the Unified Namespace data model, select the message broker (MQTT/Sparkplug B), design IT/OT segmentation and establish latency and availability SLAs for each architecture level?"},yes:null,nsc:4,ysc:5}
+    ]}
+  ]},
+  bld:{name:"Building",subs:[
+    {id:"ebo",label:{es:"EBO — EcoStruxure Building Operation",en:"EBO — EcoStruxure Building Operation"},qs:[
+      {id:"bld_b1",lv:1,axis:"digitalization",t:{es:"¿Conoces EcoStruxure Building Operation (EBO 7.0) y los servidores SpaceLogic AS-P v3 / AS-B como plataforma BMS?",en:"Do you know EcoStruxure Building Operation (EBO 7.0) and SpaceLogic AS-P v3 / AS-B servers as BMS platform?"},yes:"bld_b1b",nsc:0},
+      {id:"bld_b1b",lv:1,axis:"digitalization",t:{es:"¿Puedes explicar la diferencia entre el SmartX AS-P y el AS-B en EBO? (AS-P es el servidor de planta con gestión de controladores; AS-B es el servidor de edificio con supervisión global y API REST)",en:"Can you explain the difference between SmartX AS-P and AS-B in EBO? (AS-P is the plant server managing controllers; AS-B is the building server with global supervision and REST API)"},yes:"bld_b2",nsc:0},
+      {id:"bld_b2",lv:2,axis:"operation",t:{es:"¿Has trabajado con EBO para supervisión de sistemas de edificio: HVAC, iluminación, accesos o energía?",en:"Have you worked with EBO for building system supervision: HVAC, lighting, access or energy?"},yes:"bld_b2b",nsc:1},
+      {id:"bld_b2b",lv:2,axis:"operation",t:{es:"¿Has navegado por los gráficos de proceso en EBO, reconocido alarmas activas, consultado tendencias históricas y generado informes de consumo energético para un cliente?",en:"Have you navigated process graphics in EBO, acknowledged active alarms, consulted historical trends and generated energy consumption reports for a client?"},yes:"bld_b3",nsc:1},
+      {id:"bld_b3",lv:3,axis:"configuration",t:{es:"¿Has configurado lógicas de control, gráficos, alarmas o integraciones BACnet/IP, Modbus, LonWorks o MQTT en EBO?",en:"Have you configured control logic, graphics, alarms or BACnet/IP, Modbus, LonWorks, MQTT integrations in EBO?"},yes:"bld_b3b",nsc:2},
+      {id:"bld_b3b",lv:3,axis:"configuration",t:{es:"¿Creaste un objeto BACnet Device en EBO para integrar un controlador de terceros, mapeaste sus objetos BACnet (AV, AO, BV, BO) y configuraste las suscripciones COV para actualización eficiente de datos?",en:"Did you create a BACnet Device object in EBO to integrate a third-party controller, map its BACnet objects (AV, AO, BV, BO) and configure COV subscriptions for efficient data updates?"},yes:"bld_b4",nsc:2},
+      {id:"bld_b4",lv:4,axis:"diagnosis",t:{es:"¿Has diagnosticado problemas de comunicación BACnet, fallos de controladores SpaceLogic o pérdida de datos de tendencias?",en:"Have you diagnosed BACnet comms issues, SpaceLogic controller failures or trend data loss?"},yes:"bld_b4b",nsc:3},
+      {id:"bld_b4b",lv:4,axis:"diagnosis",t:{es:"¿Usaste el BACnet Browser de EBO para verificar la comunicación con los dispositivos, identificaste el dispositivo con fallo y determinaste si el problema era de red, configuración o hardware del controlador?",en:"Did you use EBO's BACnet Browser to verify device communication, identify the failing device and determine if the problem was network, configuration or controller hardware?"},yes:"bld_b5",nsc:3},
+      {id:"bld_b5",lv:5,axis:"design",t:{es:"¿Has diseñado una arquitectura BMS completa (Enterprise Server → SpaceLogic AS → controladores → sensores) para un edificio o campus?",en:"Have you designed a complete BMS architecture (Enterprise Server → SpaceLogic AS → controllers → sensors) for a building or campus?"},yes:"bld_b5b",nsc:4},
+      {id:"bld_b5b",lv:5,axis:"design",t:{es:"¿Dimensionaste el número de puntos por controlador, seleccionaste el protocolo de campo (BACnet MS/TP, BACnet/IP, Modbus) según la aplicación, definiste la redundancia del servidor y estableciste la estrategia de integración con sistemas de terceros (HVAC, CCTV, control de accesos)?",en:"Did you size the number of points per controller, select field protocol (BACnet MS/TP, BACnet/IP, Modbus) per application, define server redundancy and establish integration strategy with third-party systems (HVAC, CCTV, access control)?"},yes:null,nsc:4,ysc:5}
+    ]},
+    {id:"hvac_ctrl",label:{es:"Control HVAC & Controladores SpaceLogic",en:"HVAC Control & SpaceLogic Controllers"},qs:[
+      {id:"bld_h1",lv:1,axis:"operation",t:{es:"¿Conoces los controladores SpaceLogic RP y MP para zonas HVAC (fancoil, VAV, UTA) en edificios?",en:"Do you know SpaceLogic RP and MP controllers for HVAC zones (fancoil, VAV, AHU) in buildings?"},yes:"bld_h1b",nsc:0},
+      {id:"bld_h1b",lv:1,axis:"operation",t:{es:"¿Puedes explicar la diferencia entre un controlador RP y un MP SpaceLogic? (RP es para aplicaciones de sala y zona; MP es multipropósito para planta con más I/O y capacidad de programación avanzada)",en:"Can you explain the difference between SpaceLogic RP and MP controllers? (RP is for room and zone applications; MP is multipurpose for plant room with more I/O and advanced programming)"},yes:"bld_h2",nsc:0},
+      {id:"bld_h2",lv:3,axis:"configuration",t:{es:"¿Has programado controladores SpaceLogic con Function Block o Script para control de HVAC?",en:"Have you programmed SpaceLogic controllers with Function Block or Script for HVAC control?"},yes:"bld_h2b",nsc:1},
+      {id:"bld_h2b",lv:3,axis:"configuration",t:{es:"¿Programaste una secuencia de control de UTA en SpaceLogic incluyendo control de temperatura de impulsión, gestión de compuertas de mezcla, arranque/paro de ventiladores con interlocks de seguridad y alarmas de filtro?",en:"Did you program an AHU control sequence in SpaceLogic including supply air temperature control, mixing damper management, fan start/stop with safety interlocks and filter alarms?"},yes:"bld_h3",nsc:2},
+      {id:"bld_h3",lv:5,axis:"design",t:{es:"¿Has seleccionado y dimensionado la arquitectura de control HVAC completa para un proyecto de edificio?",en:"Have you selected and sized the complete HVAC control architecture for a building project?"},yes:"bld_h3b",nsc:3},
+      {id:"bld_h3b",lv:5,axis:"design",t:{es:"¿Calculaste el número de puntos I/O por sistema (UTA, fancoil, VAV), seleccionaste el tipo de controlador por aplicación, definiste el bus de campo (BACnet MS/TP vs IP) y dimensionaste los cuadros de control con alimentaciones, protecciones y comunicaciones?",en:"Did you calculate I/O points per system (AHU, fancoil, VAV), select controller type by application, define field bus (BACnet MS/TP vs IP) and size control panels with power supplies, protection and communications?"},yes:null,nsc:4,ysc:5}
+    ]},
+    {id:"energy_bld",label:{es:"Eficiencia Energética & KPIs de Edificio",en:"Energy Efficiency & Building KPIs"},qs:[
+      {id:"bld_e1",lv:1,axis:"digitalization",t:{es:"¿Trabajas con KPIs energéticos en edificios (consumo por m², emisiones CO2, benchmarking BREEAM/NABERS o ISO 50001)?",en:"Do you work with building energy KPIs (consumption per m², CO2 emissions, BREEAM/NABERS benchmarking or ISO 50001)?"},yes:"bld_e1b",nsc:0},
+      {id:"bld_e1b",lv:1,axis:"digitalization",t:{es:"¿Puedes explicar qué mide el indicador EUI (Energy Use Intensity) y cómo se usa para comparar el rendimiento energético de un edificio con los benchmarks de su tipología?",en:"Can you explain what the EUI (Energy Use Intensity) indicator measures and how it's used to compare a building's energy performance against its typology benchmarks?"},yes:"bld_e2",nsc:0},
+      {id:"bld_e2",lv:3,axis:"design",t:{es:"¿Has realizado auditorías energéticas o propuesto medidas de ahorro cuantificadas para edificios?",en:"Have you conducted energy audits or proposed quantified savings measures for buildings?"},yes:"bld_e2b",nsc:1},
+      {id:"bld_e2b",lv:3,axis:"design",t:{es:"¿Identificaste las principales oportunidades de ahorro (ej. optimización de horarios HVAC, regulación de iluminación, corrección de factor de potencia), cuantificaste el ahorro esperado en kWh y €, y priorizaste las acciones por ROI?",en:"Did you identify key savings opportunities (e.g. HVAC schedule optimization, lighting control, power factor correction), quantify expected savings in kWh and €, and prioritize actions by ROI?"},yes:"bld_e3",nsc:2},
+      {id:"bld_e3",lv:5,axis:"design",t:{es:"¿Has definido un roadmap de digitalización energética para un cliente con análisis coste-beneficio?",en:"Have you defined an energy digitalization roadmap for a client with cost-benefit analysis?"},yes:"bld_e3b",nsc:3},
+      {id:"bld_e3b",lv:5,axis:"design",t:{es:"¿Estructuraste el roadmap por fases (medida → monitorización → optimización → certificación), estableciste los KPIs objetivo para cada fase, calculaste el VAN y TIR del proyecto y lo presentaste al comité de dirección del cliente?",en:"Did you structure the roadmap by phases (metering → monitoring → optimization → certification), set target KPIs for each phase, calculate NPV and IRR and present it to the client's management committee?"},yes:null,nsc:4,ysc:5}
+    ]}
+  ]},
+  sp:{name:"Secure Power",subs:[
+    {id:"ups",label:{es:"UPS — Smart-UPS, Symmetra, Galaxy VS/VL/VXL",en:"UPS — Smart-UPS, Symmetra, Galaxy VS/VL/VXL"},qs:[
+      {id:"sp_u1",lv:1,axis:"operation",t:{es:"¿Conoces la gama APC/Schneider: Smart-UPS (SME/SMT), Symmetra PX y Galaxy (VS, VL, VM, VXL)?",en:"Do you know the APC/Schneider range: Smart-UPS (SME/SMT), Symmetra PX and Galaxy (VS, VL, VM, VXL)?"},yes:"sp_u1b",nsc:0},
+      {id:"sp_u1b",lv:1,axis:"operation",t:{es:"¿Puedes explicar cuándo se usa un Galaxy VS frente a un Galaxy VL? (VS es modular de simple conversión para CPD medianos; VL es trimodular de triple conversión para misión crítica con eficiencia ECOnversion)",en:"Can you explain when to use a Galaxy VS vs Galaxy VL? (VS is modular single conversion for mid-size DCs; VL is tri-modular triple conversion for mission critical with ECOnversion efficiency)"},yes:"sp_u2",nsc:0},
+      {id:"sp_u2",lv:2,axis:"operation",t:{es:"¿Has puesto en servicio o mantenido sistemas UPS en entornos críticos (CPD, hospitales, industria)?",en:"Have you commissioned or maintained UPS systems in critical environments (DC, hospitals, industry)?"},yes:"sp_u2b",nsc:1},
+      {id:"sp_u2b",lv:2,axis:"operation",t:{es:"¿Realizaste la prueba de transferencia a batería (test de autonomía), verificaste el tiempo de conmutación al bypass y comprobaste el estado de las baterías (impedancia, tensión por bloque) durante el mantenimiento?",en:"Did you perform a battery transfer test (runtime test), verify switchover time to bypass and check battery condition (impedance, block voltage) during maintenance?"},yes:"sp_u3",nsc:1},
+      {id:"sp_u3",lv:3,axis:"configuration",t:{es:"¿Has configurado monitorización remota de UPS vía NMC3 o EcoStruxure IT Expert?",en:"Have you configured remote UPS monitoring via NMC3 or EcoStruxure IT Expert?"},yes:"sp_u3b",nsc:2},
+      {id:"sp_u3b",lv:3,axis:"configuration",t:{es:"¿Configuraste la NMC3 con dirección IP, credenciales SNMP v3, umbrales de alarma (tensión de batería, temperatura, carga) y notificaciones por email o trampa SNMP hacia el sistema de gestión?",en:"Did you configure the NMC3 with IP address, SNMP v3 credentials, alarm thresholds (battery voltage, temperature, load) and email or SNMP trap notifications to the management system?"},yes:"sp_u4",nsc:2},
+      {id:"sp_u4",lv:4,axis:"diagnosis",t:{es:"¿Has diagnosticado fallos en UPS: baterías VRLA/Li-ion, módulos de potencia, bypass estático/manual?",en:"Have you diagnosed UPS faults: VRLA/Li-ion batteries, power modules, static/manual bypass?"},yes:"sp_u4b",nsc:3},
+      {id:"sp_u4b",lv:4,axis:"diagnosis",t:{es:"¿Analizaste el log de eventos del UPS para correlacionar una alarma con su causa raíz (ej. módulo de batería con alta impedancia que causó una alarma de autonomía insuficiente) y determinaste si era necesaria la sustitución del módulo o solo una recalibración?",en:"Did you analyze the UPS event log to correlate an alarm with its root cause (e.g. battery module with high impedance causing insufficient runtime alarm) and determine if module replacement or just recalibration was needed?"},yes:"sp_u5",nsc:3},
+      {id:"sp_u5",lv:5,axis:"design",t:{es:"¿Has dimensionado UPS para CPD o instalación crítica (potencia kVA, autonomía, topología N+1/2N, VRLA vs Li-ion)?",en:"Have you sized UPS for a DC or critical facility (kVA, runtime, N+1/2N topology, VRLA vs Li-ion)?"},yes:"sp_u5b",nsc:4},
+      {id:"sp_u5b",lv:5,axis:"design",t:{es:"¿Calculaste la carga IT total (con factor de crecimiento), seleccionaste la topología de redundancia (N+1 o 2N) según el nivel Tier requerido, comparaste VRLA vs Li-ion por TCO y definiste el plan de mantenimiento preventivo?",en:"Did you calculate total IT load (with growth factor), select redundancy topology (N+1 or 2N) per required Tier level, compare VRLA vs Li-ion by TCO and define the preventive maintenance plan?"},yes:null,nsc:4,ysc:5}
+    ]},
+    {id:"dcim",label:{es:"DCIM — EcoStruxure IT Expert & IT Advisor",en:"DCIM — EcoStruxure IT Expert & IT Advisor"},qs:[
+      {id:"sp_d1",lv:1,axis:"digitalization",t:{es:"¿Conoces EcoStruxure IT Expert (cloud DCIM) o IT Advisor (planificación y modelado) para gestión de CPD?",en:"Do you know EcoStruxure IT Expert (cloud DCIM) or IT Advisor (planning and modeling) for DC management?"},yes:"sp_d1b",nsc:0},
+      {id:"sp_d1b",lv:1,axis:"digitalization",t:{es:"¿Puedes explicar la diferencia entre IT Expert e IT Advisor? (IT Expert es monitorización cloud en tiempo real de activos; IT Advisor es modelado 3D y planificación de capacidad para diseño y what-if analysis)",en:"Can you explain the difference between IT Expert and IT Advisor? (IT Expert is real-time cloud asset monitoring; IT Advisor is 3D modeling and capacity planning for design and what-if analysis)"},yes:"sp_d2",nsc:0},
+      {id:"sp_d2",lv:2,axis:"operation",t:{es:"¿Has usado DCIM para gestión de activos, alarmas y capacidad en un CPD real?",en:"Have you used DCIM for asset management, alarms and capacity in a real data center?"},yes:"sp_d2b",nsc:1},
+      {id:"sp_d2b",lv:2,axis:"operation",t:{es:"¿Registraste activos en el DCIM (UPS, PDUs, servidores), vinculaste los sensores de monitorización, configuraste el árbol de alimentación eléctrica y utilizaste el dashboard de PUE para seguimiento de eficiencia?",en:"Did you register assets in DCIM (UPS, PDUs, servers), link monitoring sensors, configure the electrical power tree and use the PUE dashboard for efficiency tracking?"},yes:"sp_d3",nsc:1},
+      {id:"sp_d3",lv:3,axis:"configuration",t:{es:"¿Has configurado EcoStruxure IT Expert con NMC para monitorización de UPS, PDUs y sensores en CPD?",en:"Have you configured EcoStruxure IT Expert with NMC for UPS, PDU and sensor monitoring in a DC?"},yes:"sp_d3b",nsc:2},
+      {id:"sp_d3b",lv:3,axis:"configuration",t:{es:"¿Configuraste la integración entre IT Expert y las NMC de los UPS para obtener datos de carga, tensión de batería y autonomía en tiempo real, y estableciste las reglas de alerta con escalado de notificaciones?",en:"Did you configure the integration between IT Expert and UPS NMCs to get real-time load, battery voltage and runtime data, and set alert rules with notification escalation?"},yes:"sp_d4",nsc:2},
+      {id:"sp_d4",lv:5,axis:"design",t:{es:"¿Has propuesto una solución DCIM completa (IT Expert + IT Advisor) con PUE, gestión de capacidad y ciberseguridad?",en:"Have you proposed a complete DCIM solution (IT Expert + IT Advisor) with PUE, capacity management and cybersecurity?"},yes:"sp_d4b",nsc:3},
+      {id:"sp_d4b",lv:5,axis:"design",t:{es:"¿Definiste la arquitectura de integración del DCIM con los sistemas existentes (BMS, ticketing, CMDB), estableciste los procesos de gestión de cambios, calculaste el ROI del proyecto y presentaste el caso de negocio al cliente incluyendo métricas de sostenibilidad (PUE, WUE, CUE)?",en:"Did you define DCIM integration architecture with existing systems (BMS, ticketing, CMDB), establish change management processes, calculate project ROI and present the business case to the client including sustainability metrics (PUE, WUE, CUE)?"},yes:null,nsc:4,ysc:5}
+    ]},
+    {id:"pdu_racks",label:{es:"PDUs, Racks NetShelter & Distribución de Potencia",en:"PDUs, NetShelter Racks & Power Distribution"},qs:[
+      {id:"sp_r1",lv:1,axis:"operation",t:{es:"¿Conoces los racks NetShelter y la gama de PDUs Schneider (básicas, monitorizadas, gestionadas) para CPD?",en:"Do you know NetShelter racks and Schneider PDU range (basic, metered, managed) for data centers?"},yes:"sp_r1b",nsc:0},
+      {id:"sp_r1b",lv:1,axis:"operation",t:{es:"¿Puedes explicar cuándo se especifica una PDU gestionada frente a una monitorizada? (gestionada permite control remoto de tomas individuales para reinicio de equipos; monitorizada solo mide sin control de salidas)",en:"Can you explain when to specify a managed vs metered PDU? (managed allows remote control of individual outlets for equipment restart; metered only measures without outlet control)"},yes:"sp_r2",nsc:0},
+      {id:"sp_r2",lv:3,axis:"configuration",t:{es:"¿Has diseñado o especificado la distribución de potencia dentro de un CPD (UPS → PDU sala → PDU rack → servidor)?",en:"Have you designed or specified power distribution within a DC (UPS → floor PDU → rack PDU → server)?"},yes:"sp_r2b",nsc:2},
+      {id:"sp_r2b",lv:3,axis:"configuration",t:{es:"¿Calculaste la carga por rack, seleccionaste la fase de alimentación para equilibrar la carga entre fases, especificaste el tipo de tomas (C13/C19) según los equipos y definiste la redundancia A/B de alimentación para los servidores críticos?",en:"Did you calculate load per rack, select feed phase to balance load across phases, specify outlet type (C13/C19) per equipment and define A/B power redundancy for critical servers?"},yes:null,nsc:3,ysc:5}
+    ]}
+  ]},
+  co:{name:"Cooling",subs:[
+    {id:"precision_cooling",label:{es:"Refrigeración de Precisión (InRow DX/CW, Uniflair)",en:"Precision Cooling (InRow DX/CW, Uniflair)"},qs:[
+      {id:"co_p1",lv:1,axis:"operation",t:{es:"¿Conoces los sistemas Schneider: InRow DX (expansión directa), InRow CW (agua helada) y Uniflair Room Cooling?",en:"Do you know Schneider cooling systems: InRow DX (direct expansion), InRow CW (chilled water) and Uniflair Room Cooling?"},yes:"co_p1b",nsc:0},
+      {id:"co_p1b",lv:1,axis:"operation",t:{es:"¿Puedes explicar cuándo se usa InRow DX vs InRow CW? (DX no requiere infraestructura de agua helada, es autónomo; CW necesita planta enfriadora pero permite mayor densidad y eficiencia en instalaciones grandes)",en:"Can you explain when to use InRow DX vs InRow CW? (DX needs no chilled water infrastructure, is self-contained; CW needs a chiller but allows higher density and efficiency in large installations)"},yes:"co_p2",nsc:0},
+      {id:"co_p2",lv:2,axis:"operation",t:{es:"¿Has puesto en marcha o mantenido unidades de refrigeración de precisión en CPD o salas de servidores?",en:"Have you commissioned or maintained precision cooling units in data centers or server rooms?"},yes:"co_p2b",nsc:1},
+      {id:"co_p2b",lv:2,axis:"operation",t:{es:"¿Verificaste los parámetros de puesta en marcha de la unidad: temperatura de impulsión, set-point de temperatura y humedad, modo de operación de los ventiladores EC y comprobaste la ausencia de puntos calientes con termómetro infrarrojo?",en:"Did you verify unit commissioning parameters: supply air temperature, temperature and humidity set-point, EC fan operating mode and check for hot spots with infrared thermometer?"},yes:"co_p3",nsc:1},
+      {id:"co_p3",lv:3,axis:"configuration",t:{es:"¿Has configurado controles de temperatura, humedad o velocidad de ventiladores EC en sistemas de refrigeración Schneider?",en:"Have you configured temperature, humidity or EC fan speed controls in Schneider cooling systems?"},yes:"co_p3b",nsc:2},
+      {id:"co_p3b",lv:3,axis:"configuration",t:{es:"¿Configuraste el control de free-cooling (economizador) en una unidad InRow CW, ajustando los set-points de activación según la temperatura del agua helada y la carga IT para maximizar las horas de free-cooling anual?",en:"Did you configure free-cooling (economizer) control on an InRow CW unit, adjusting activation set-points based on chilled water temperature and IT load to maximize annual free-cooling hours?"},yes:"co_p4",nsc:2},
+      {id:"co_p4",lv:4,axis:"diagnosis",t:{es:"¿Has diagnosticado problemas de refrigeración: puntos calientes, alarmas de temperatura, fallos de compresor?",en:"Have you diagnosed cooling issues: hot spots, temperature alarms, compressor failures?"},yes:"co_p4b",nsc:3},
+      {id:"co_p4b",lv:4,axis:"diagnosis",t:{es:"¿Analizaste el mapa térmico del CPD para identificar el origen del punto caliente (cable management deficiente, blanking panels ausentes, alta densidad localizada), determinaste la causa raíz y propusiste la solución (redistribución de carga, sellos de pasacables, unidad adicional)?",en:"Did you analyze the DC thermal map to identify the hot spot origin (poor cable management, missing blanking panels, localized high density), determine root cause and propose solution (load redistribution, cable grommets, additional unit)?"},yes:"co_p5",nsc:3},
+      {id:"co_p5",lv:5,axis:"design",t:{es:"¿Has diseñado una arquitectura de refrigeración para CPD (carga térmica, layout, contención de pasillo, redundancia N+1)?",en:"Have you designed a DC cooling architecture (thermal load, layout, aisle containment, N+1 redundancy)?"},yes:"co_p5b",nsc:4},
+      {id:"co_p5b",lv:5,axis:"design",t:{es:"¿Calculaste la carga térmica total (carga IT + pérdidas de UPS + iluminación + envolvente), dimensionaste las unidades de refrigeración con el factor de redundancia requerido, diseñaste la contención de pasillo frío/caliente y verificaste el caudal de aire por rack con herramientas CFD?",en:"Did you calculate total thermal load (IT load + UPS losses + lighting + building envelope), size cooling units with required redundancy factor, design cold/hot aisle containment and verify airflow per rack with CFD tools?"},yes:null,nsc:4,ysc:5}
+    ]},
+    {id:"chillers",label:{es:"Chillers & Free-Cooling (Uniflair, EcoBreeze)",en:"Chillers & Free-Cooling (Uniflair, EcoBreeze)"},qs:[
+      {id:"co_c1",lv:1,axis:"operation",t:{es:"¿Conoces los chillers Uniflair (air cooled, adiabáticos, free-cooling) y sistemas EcoBreeze para grandes CPD?",en:"Do you know Uniflair chillers (air cooled, adiabatic, free-cooling) and EcoBreeze systems for large DCs?"},yes:"co_c1b",nsc:0},
+      {id:"co_c1b",lv:1,axis:"operation",t:{es:"¿Puedes explicar el principio del free-cooling adiabático en los chillers Uniflair? (el pre-enfriamiento evaporativo del aire exterior reduce la temperatura de condensación, permitiendo operar en modo free-cooling a temperaturas exteriores más altas y mejorando el PUE)",en:"Can you explain the adiabatic free-cooling principle in Uniflair chillers? (evaporative pre-cooling of outdoor air reduces condensation temperature, enabling free-cooling at higher outdoor temperatures and improving PUE)"},yes:"co_c2",nsc:0},
+      {id:"co_c2",lv:3,axis:"configuration",t:{es:"¿Has supervisado o configurado sistemas de agua helada (circuito primario/secundario, CDU, set-point) en CPD?",en:"Have you supervised or configured chilled water systems (primary/secondary circuit, CDU, set-point) in DCs?"},yes:"co_c2b",nsc:1},
+      {id:"co_c2b",lv:3,axis:"configuration",t:{es:"¿Configuraste el control de la temperatura de agua helada en el chiller (set-point de impulsión, reset por carga), ajustaste el control del circuito secundario (bombas de velocidad variable) y verificaste el delta T real entre impulsión y retorno?",en:"Did you configure chilled water temperature control on the chiller (supply set-point, load reset), adjust secondary circuit control (variable speed pumps) and verify actual delta T between supply and return?"},yes:"co_c3",nsc:2},
+      {id:"co_c3",lv:5,axis:"design",t:{es:"¿Has dimensionado un sistema de chillers completo para un CPD (carga IT, PUE objetivo, WUE, redundancia, free-cooling ratio)?",en:"Have you sized a complete chiller system for a DC (IT load, PUE target, WUE, redundancy, free-cooling ratio)?"},yes:"co_c3b",nsc:3},
+      {id:"co_c3b",lv:5,axis:"design",t:{es:"¿Calculaste la carga de refrigeración total, seleccionaste el número y tamaño de chillers para conseguir el PUE objetivo, estimaste el ratio de horas de free-cooling anual para el clima de la ubicación y calculaste el WUE del sistema adiabático?",en:"Did you calculate total cooling load, select number and size of chillers to achieve PUE target, estimate annual free-cooling hours ratio for site climate and calculate WUE of the adiabatic system?"},yes:null,nsc:4,ysc:5}
+    ]},
+    {id:"pue_liquid",label:{es:"PUE, WUE & Refrigeración Líquida (CDU, DTC)",en:"PUE, WUE & Liquid Cooling (CDU, DTC)"},qs:[
+      {id:"co_e1",lv:1,axis:"digitalization",t:{es:"¿Trabajas con métricas PUE y WUE para medir la eficiencia energética e hídrica de un CPD?",en:"Do you work with PUE and WUE metrics to measure energy and water efficiency of a data center?"},yes:"co_e1b",nsc:0},
+      {id:"co_e1b",lv:1,axis:"digitalization",t:{es:"¿Puedes calcular el PUE de un CPD si conoces la potencia total del edificio y la potencia IT? ¿Sabes cuál es el PUE de referencia según nivel Tier y qué factores lo impactan más (temperatura de sala, topología de refrigeración, eficiencia de UPS)?",en:"Can you calculate a DC's PUE if you know total building power and IT power? Do you know the reference PUE per Tier level and which factors impact it most (room temperature, cooling topology, UPS efficiency)?"},yes:"co_e2",nsc:0},
+      {id:"co_e2",lv:3,axis:"design",t:{es:"¿Has propuesto o implementado mejoras de PUE para un CPD existente?",en:"Have you proposed or implemented PUE improvements for an existing DC?"},yes:"co_e2b",nsc:1},
+      {id:"co_e2b",lv:3,axis:"design",t:{es:"¿Cuantificaste el impacto de cada medida propuesta (ej. incremento de set-point de temperatura +2°C → reducción de 0.05 en PUE; implementación de contención de pasillo → reducción de 0.1) y priorizaste por coste/beneficio?",en:"Did you quantify the impact of each proposed measure (e.g. +2°C temperature set-point increase → 0.05 PUE reduction; aisle containment implementation → 0.1 reduction) and prioritize by cost/benefit?"},yes:"co_e3",nsc:2},
+      {id:"co_e3",lv:5,axis:"design",t:{es:"¿Has diseñado o especificado soluciones de refrigeración líquida (direct-to-chip, CDU, immersion) para cargas de alta densidad o IA?",en:"Have you designed or specified liquid cooling solutions (direct-to-chip, CDU, immersion) for high-density or AI loads?"},yes:"co_e3b",nsc:3},
+      {id:"co_e3b",lv:5,axis:"design",t:{es:"¿Seleccionaste la tecnología de refrigeración líquida según la densidad de rack (DTC para >20kW/rack, immersion para >100kW/rack), calculaste el caudal y delta T del circuito de agua de proceso y definiste la interfaz con la infraestructura de cooling exterior (dry cooler, chiller)?",en:"Did you select liquid cooling technology based on rack density (DTC for >20kW/rack, immersion for >100kW/rack), calculate flow rate and delta T of the process water circuit and define interface with external cooling infrastructure (dry cooler, chiller)?"},yes:null,nsc:4,ysc:5}
+    ]}
+  ]}
+};
+
+/* ── helpers ── */
+const buildQMap=buId=>{const m={};(TREES[buId]?.subs||[]).forEach(sd=>sd.qs.forEach(q=>{m[q.id]={...q,sdId:sd.id,sdLabel:sd.label};}));return m;};
+const firstQ=buId=>TREES[buId]?.subs?.[0]?.qs?.[0]?.id||null;
+const nextSdFirst=(buId,sdId)=>{const subs=TREES[buId]?.subs||[];const idx=subs.findIndex(s=>s.id===sdId);return idx>=0&&idx<subs.length-1?subs[idx+1].qs[0].id:null;};
+const buInfo=id=>BUS.find(b=>b.id===id)||{};
+const profileFor=score=>PROFILES.find(p=>score>=p.min)||PROFILES[PROFILES.length-1];
+const getCeiling=(sdId,role)=>CEILINGS[sdId]?.[role]||5;
+
+/* ── Recommendations ── */
+const REC = {
+  role:{
+    fsr:{es:{path:"FSR → FSR Senior → Field Application Engineer → Consultor Técnico",next:"Para evolucionar como FSR, el siguiente paso es dominar el troubleshooting en al menos 2 BUs y comenzar a liderar puestas en marcha complejas de forma autónoma.",focus:["Profundizar en diagnóstico eléctrico avanzado: calidad de red con ION9000 (BLDPRDC0001035), coordinación de protecciones BT/MT y uso de EcoStruxure Panel Server (BLDECXCS0001035)","Certificarte en las plataformas que mantienes vía mySchneider Academy: PME ION Technology (BLDPRDI0001057), EPO Customization & Troubleshooting (BLDPRDCS0001050/51)","Documentar intervenciones y desarrollar habilidad para escalar correctamente a Tendering o ingeniería"]},en:{path:"FSR → Senior FSR → Field Application Engineer → Technical Consultant",next:"To grow as an FSR, the next step is mastering troubleshooting across at least 2 BUs and leading complex commissioning autonomously.",focus:["Deepen advanced electrical diagnostics: power quality with ION9000 (BLDPRDC0001035), LV/MV protection coordination and EcoStruxure Panel Server (BLDECXCS0001035)","Get certified on platforms you maintain via mySchneider Academy: PME ION Technology (BLDPRDI0001057), EPO Customization & Troubleshooting (BLDPRDCS0001050/51)","Document interventions and develop skills to escalate correctly to Tendering or engineering"]}},
+    planner:{es:{path:"Planificador → Planificador Senior → Service Operations Manager → Service Business Manager",next:"El planificador evoluciona ganando visión técnica de las BUs que coordina y competencias de gestión operativa de servicios (SAP PM, metodologías ágiles).",focus:["Conocer a nivel funcional los productos de las BUs que coordinas: PM5000/PM8000 (BLDPRDC0001002), PowerTag (PTRPRDE0001019), PME (PTRNRGW0001009)","Dominar herramientas de planificación de recursos, gestión de materiales y KPIs de servicio (SLA, MTTR, backlog)","Desarrollar habilidades de comunicación con cliente, gestión de subcontratas y reporting ejecutivo"]},en:{path:"Planner → Senior Planner → Service Operations Manager → Service Business Manager",next:"The planner grows by gaining functional technical knowledge of coordinated BUs and service operations management skills.",focus:["Understand products of coordinated BUs at functional level: PM5000/PM8000 (BLDPRDC0001002), PowerTag (PTRPRDE0001019), PME (PTRNRGW0001009)","Master resource planning, materials management and service KPI tools (SLA, MTTR, backlog)","Develop client communication, subcontractor management and executive reporting skills"]}},
+    tendering:{es:{path:"Tendering Junior → Tendering Senior → Solution Architect → Business Developer",next:"El siguiente nivel en Tendering es pasar de especificar productos a diseñar soluciones multi-BU completas con visión de ROI para el cliente.",focus:["Dominar dimensionamiento y arquitectura en Digital Power: jerarquía de medida, Panel Server (BLDECXCS0001035), PME Deployment (BLDECXCS0001003/4/5) y EPAS (ERGNRGE0001025, ERGNRGI0001015)","Ampliar cobertura hacia BUs adyacentes para propuestas integradas (Power + Digital Power + Secure Power)","Desarrollar argumentación de valor (TCO, ROI, sostenibilidad, ciberseguridad IEC 62443 — EPAECXES0001041)"]},en:{path:"Junior Tendering → Senior Tendering → Solution Architect → Business Developer",next:"The next level in Tendering is moving from product specification to complete multi-BU solutions with client ROI vision.",focus:["Master sizing and architecture in Digital Power: metering hierarchy, Panel Server (BLDECXCS0001035), PME Deployment (BLDECXCS0001003/4/5) and EPAS (ERGNRGE0001025, ERGNRGI0001015)","Expand to adjacent BUs for integrated proposals (Power + Digital Power + Secure Power)","Develop value argumentation (TCO, ROI, sustainability, cybersecurity IEC 62443 — EPAECXES0001041)"]}},
+    consultant:{es:{path:"Consultor Técnico → Consultor Senior → Principal Consultant → Pre-Sales Director",next:"El consultor avanza articulando propuestas de valor basadas en datos reales del cliente y conectando tecnología con objetivos de negocio.",focus:["Profundizar en plataformas EcoStruxure (PME — PTRNRGW0001009, EPO, EPAS, DCIM, EBO) para construir casos de negocio sólidos","Desarrollar análisis de KPIs energéticos, PUE y sostenibilidad para propuestas de decarbonización (Power Advisor — PTRSERE2000)","Construir visión multi-BU con roadmap digital integrado y ciberseguridad (EPAECXES0001041) para el cliente"]},en:{path:"Technical Consultant → Senior Consultant → Principal Consultant → Pre-Sales Director",next:"The consultant advances by articulating value propositions based on real client data and connecting technology with business objectives.",focus:["Deepen EcoStruxure platforms (PME — PTRNRGW0001009, EPO, EPAS, DCIM, EBO) to build solid business cases","Develop energy KPI, PUE and sustainability analysis for decarbonisation proposals (Power Advisor — PTRSERE2000)","Build multi-BU vision with integrated digital roadmap and cybersecurity (EPAECXES0001041) for clients"]}}
+  },
+  axis:{
+    digitalization:{es:"Invertir tiempo en plataformas EcoStruxure (PME, EPO, EBO, DCIM): demos, proyectos piloto o formación en mySchneider Academy.\n📚 Coursera: «Electric Power Systems» (University at Buffalo) · «Electric Industry Operations and Markets» (Duke University) · «Electrical Power Distribution» (L&T EduTech)",en:"Invest time in EcoStruxure platforms (PME, EPO, EBO, DCIM): demos, pilot projects or mySchneider Academy training.\n📚 Coursera: «Electric Power Systems» (University at Buffalo) · «Electric Industry Operations and Markets» (Duke University) · «Electrical Power Distribution» (L&T EduTech)"},
+    operation:{es:"Buscar oportunidades de participar en puestas en marcha o mantenimientos junto a FSRs senior, o solicitar acceso a equipos en laboratorio.\n📚 Coursera: «A Practitioner's Approach to Power Distribution & Automation» (L&T EduTech) · «Power System: Generation, Transmission and Protection» (L&T EduTech)",en:"Seek opportunities to join commissioning or maintenance alongside senior FSRs, or request lab equipment access.\n📚 Coursera: «A Practitioner's Approach to Power Distribution & Automation» (L&T EduTech) · «Power System: Generation, Transmission and Protection» (L&T EduTech)"},
+    configuration:{es:"Practicar configuración en simuladores (EcoStruxure Power Commission, EcoStruxure Machine Expert Trial, EBO demo server).\n📚 Coursera: «Foundations of IoT Systems and Industrial Automation» (LearnQuest) · «Advanced IoT Systems Integration and Industrial Applications» (LearnQuest)",en:"Practice configuration in simulators (EcoStruxure Power Commission, EcoStruxure Machine Expert Trial, EBO demo server).\n📚 Coursera: «Foundations of IoT Systems and Industrial Automation» (LearnQuest) · «Advanced IoT Systems Integration and Industrial Applications» (LearnQuest)"},
+    integration:{es:"Trabajar en proyectos de integración reales: configurar un gateway, establecer Modbus TCP entre un medidor y PME, o publicar datos a un dashboard.\n📚 Coursera: «M2M & IoT Interface Design & Protocols for Embedded Systems» (University of Colorado Boulder) · «Communication and Network Security» (Packt)",en:"Work on real integration projects: configure a gateway, establish Modbus TCP between a meter and PME, or publish data to a dashboard.\n📚 Coursera: «M2M & IoT Interface Design & Protocols for Embedded Systems» (University of Colorado Boulder) · «Communication and Network Security» (Packt)"},
+    design:{es:"Involucrarse en la fase de diseño junto al equipo de Tendering: revisar especificaciones, participar en revisiones de arquitectura y aprender herramientas de dimensionamiento.\n📚 Coursera: «Electric Power Systems» (University at Buffalo) · «A Practitioner's Approach to Power Distribution & Automation» (L&T EduTech)",en:"Get involved in design phases alongside the Tendering team: review specs, join architecture reviews and learn sizing tools.\n📚 Coursera: «Electric Power Systems» (University at Buffalo) · «A Practitioner's Approach to Power Distribution & Automation» (L&T EduTech)"},
+    diagnosis:{es:"Solicitar acceso a casos de troubleshooting documentados, practicar análisis de logs en laboratorio y acompañar a FSRs senior en intervenciones complejas.\n📚 Coursera: «Industrial Cybersecurity» (Edureka) · «OT/ICS Certified Security Professional Prep» (Infosec) · «Securing Industrial Control and Safety Instrumented Systems» (Packt)",en:"Request access to documented troubleshooting cases, practice log analysis in lab and shadow senior FSRs on complex interventions.\n📚 Coursera: «Industrial Cybersecurity» (Edureka) · «OT/ICS Certified Security Professional Prep» (Infosec) · «Securing Industrial Control and Safety Instrumented Systems» (Packt)"}
+  }
+};
+
+/* ── Radar ── */
+function Radar({actual,self,manager,lang}){
+  const cx=130,cy=130,r=98,n=AXES.length;
+  const pt=(v,i)=>{const a=(2*Math.PI*i/n)-Math.PI/2;return[cx+r*v*Math.cos(a),cy+r*v*Math.sin(a)];};
+  const poly=vals=>AXES.map((_,i)=>pt((vals[AXES[i]]||0)/5,i));
+  const tp=pts=>pts.map(([x,y])=>`${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const axTips=AXES.map((_,i)=>pt(1,i));
+  const lblPts=AXES.map((_,i)=>pt(1.3,i));
+  const al=AXIS_LABEL[lang];
+  return(
+    React.createElement('svg',{viewBox:"0 0 260 260",style:{width:"100%",maxWidth:240,display:"block",margin:"0 auto"}},
+      [.2,.4,.6,.8,1].map(v=>React.createElement('polygon',{key:v,points:tp(AXES.map((_,i)=>pt(v,i))),fill:"none",stroke:SE.gray300,strokeWidth:"0.7"})),
+      axTips.map(([x,y],i)=>React.createElement('line',{key:i,x1:cx,y1:cy,x2:x,y2:y,stroke:SE.gray300,strokeWidth:"0.7"})),
+      React.createElement('polygon',{points:tp(poly(manager)),fill:"rgba(230,126,34,0.08)",stroke:SE.amber,strokeWidth:"1.2",strokeDasharray:"4,3"}),
+      React.createElement('polygon',{points:tp(poly(self)),fill:"rgba(0,122,58,0.08)",stroke:SE.greenDark,strokeWidth:"1.2",strokeDasharray:"6,3"}),
+      React.createElement('polygon',{points:tp(poly(actual)),fill:"rgba(0,158,77,0.2)",stroke:SE.green,strokeWidth:"2.5"}),
+      lblPts.map(([lx,ly],i)=>React.createElement('text',{key:AXES[i],x:lx,y:ly,textAnchor:"middle",dominantBaseline:"middle",fontSize:"9",fill:SE.gray700,fontFamily:"Arial,sans-serif",fontWeight:"700"},al[AXES[i]])),
+      [1,2,3,4,5].map(v=>React.createElement('text',{key:v,x:cx+3,y:(cy-r*v/5+3).toFixed(1),fontSize:"7",fill:SE.gray500,fontFamily:"Arial,sans-serif"},v))
+    )
+  );
+}
+
+/* ── DesiredSlider ── */
+function DesiredSlider({sdId,sdLabel,role,value,onChange,accentColor,lang}){
+  const ceil=getCeiling(sdId,role);
+  const ceilLabel=CEILING_LABEL[ceil]?.[lang]||ceil;
+  return(
+    React.createElement('div',{style:{marginBottom:14}},
+      React.createElement('div',{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}},
+        React.createElement('span',{style:{fontSize:12,color:SE.gray900}},sdLabel[lang]),
+        React.createElement('div',{style:{display:"flex",alignItems:"center",gap:8}},
+          React.createElement('span',{style:{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:2,background:SE.gray100,color:SE.gray500,border:`1px solid ${SE.gray300}`,letterSpacing:".04em"}},ceilLabel),
+          React.createElement('span',{style:{fontSize:14,fontWeight:700,color:accentColor,minWidth:16,textAlign:"right"}},value)
+        )
+      ),
+      React.createElement('div',{style:{position:"relative",height:22,display:"flex",alignItems:"center"}},
+        React.createElement('div',{style:{position:"absolute",left:0,right:0,height:4,background:SE.gray100,borderRadius:2}},
+          React.createElement('div',{style:{position:"absolute",left:0,height:"100%",width:`${(value/5)*100}%`,background:accentColor,borderRadius:2,opacity:.7}}),
+          React.createElement('div',{style:{position:"absolute",left:`${(ceil/5)*100}%`,top:-4,width:2,height:12,background:accentColor,borderRadius:1,transform:"translateX(-50%)"}})
+        ),
+        React.createElement('input',{type:"range",min:"1",max:ceil,step:"1",value,onChange:e=>onChange(Math.min(ceil,+e.target.value)),style:{width:"100%",position:"relative",zIndex:1,accentColor,background:"transparent"}})
+      ),
+      React.createElement('div',{style:{display:"flex",justifyContent:"space-between",fontSize:9,color:SE.gray500,marginTop:1,fontWeight:700,letterSpacing:".04em"}},
+        Array.from({length:ceil},(_,i)=>React.createElement('span',{key:i+1},i+1))
+      )
+    )
+  );
+}
+
+/* ── Recommendations ── */
+function Recommendations({scores,axRes,buRes,overallAct,overallSelf,overallMan,profAct,profSelf,profMan,role,selBUs,selfDes,manDes,allSubs,lang,t,al}){
+  const roleRec=REC.role[role]?.[lang];
+  if(!roleRec) return null;
+  const gapSubs=allSubs.map(s=>({...s,act:scores[`${s.buId}_${s.id}`]||0,ref:Math.max(selfDes[s.id]||0,manDes[s.id]||0)})).filter(s=>s.ref-s.act>=1).sort((a,b)=>(b.ref-b.act)-(a.ref-a.act)).slice(0,3);
+  const axGaps=AXES.map(ax=>({ax,act:axRes[ax]||0,gap:Math.max(0,Math.max(overallSelf,overallMan)-(axRes[ax]||0))})).filter(x=>x.gap>0.8).sort((a,b)=>b.gap-a.gap).slice(0,2);
+  const nextProfile=PROFILES.find(p=>p.min>overallAct);
+  const distToNext=nextProfile?(nextProfile.min-overallAct).toFixed(1):null;
+  const LVL={es:{1:"básico",2:"aplicado",3:"configuración",4:"troubleshooting",5:"diseño"},en:{1:"basic",2:"applied",3:"configuration",4:"troubleshooting",5:"design"}};
+  const Block=({children,accent})=>React.createElement('div',{style:{background:SE.white,border:`1px solid ${accent?SE.green:SE.gray300}`,borderLeft:`4px solid ${accent?SE.green:SE.gray300}`,borderRadius:2,padding:"14px 16px",marginBottom:10}},children);
+  const SLabel=({text})=>React.createElement('div',{style:{fontSize:10,fontWeight:700,color:SE.green,textTransform:"uppercase",letterSpacing:".1em",marginBottom:8}},text);
+  return(
+    React.createElement('div',{style:{marginBottom:"1.25rem"}},
+      React.createElement('div',{style:{...css.sectionTitle}},lang==="es"?"Plan de desarrollo recomendado":"Recommended development plan"),
+      React.createElement(Block,{accent:true},
+        React.createElement(SLabel,{text:lang==="es"?"Ruta de evolución":"Growth path"}),
+        React.createElement('div',{style:{fontSize:12,color:SE.gray500,fontStyle:"italic",marginBottom:10}},roleRec.path),
+        React.createElement(SLabel,{text:lang==="es"?"Próximo paso":"Next step"}),
+        React.createElement('div',{style:{fontSize:13,color:SE.black,lineHeight:1.6,marginBottom:12}},roleRec.next),
+        React.createElement(SLabel,{text:lang==="es"?"Focos de desarrollo":"Development focus"}),
+        roleRec.focus.map((f,i)=>React.createElement('div',{key:i,style:{display:"flex",gap:10,marginBottom:8}},
+          React.createElement('div',{style:{width:20,height:20,borderRadius:2,background:SE.green,color:SE.white,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},i+1),
+          React.createElement('div',{style:{fontSize:12,color:SE.gray900,lineHeight:1.55}},f)
+        ))
+      ),
+      nextProfile&&React.createElement(Block,{},
+        React.createElement(SLabel,{text:lang==="es"?"Distancia al siguiente perfil":"Distance to next profile"}),
+        React.createElement('div',{style:{display:"flex",alignItems:"center",gap:12,marginBottom:10}},
+          React.createElement('div',{style:{flex:1}},
+            React.createElement('div',{style:{fontSize:10,fontWeight:700,color:SE.gray500,textTransform:"uppercase",letterSpacing:".07em",marginBottom:2}},lang==="es"?"Actual":"Current"),
+            React.createElement('div',{style:{fontSize:13,fontWeight:700,color:profAct.color}},profAct.label[lang])
+          ),
+          React.createElement('div',{style:{fontSize:20,color:SE.gray300}},"→"),
+          React.createElement('div',{style:{flex:1}},
+            React.createElement('div',{style:{fontSize:10,fontWeight:700,color:SE.gray500,textTransform:"uppercase",letterSpacing:".07em",marginBottom:2}},lang==="es"?"Siguiente":"Next"),
+            React.createElement('div',{style:{fontSize:13,fontWeight:700,color:nextProfile.color}},nextProfile.label[lang])
+          ),
+          React.createElement('div',{style:{textAlign:"right"}},
+            React.createElement('div',{style:{fontSize:10,color:SE.gray500,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em"}},lang==="es"?"Faltan":"Gap"),
+            React.createElement('div',{style:{fontSize:24,fontWeight:700,color:SE.red}},`+${distToNext}`),
+            React.createElement('div',{style:{fontSize:10,color:SE.gray500}},"pts")
+          )
+        ),
+        React.createElement('div',{style:{height:6,background:SE.gray100,borderRadius:2,overflow:"hidden",border:`1px solid ${SE.gray300}`}},
+          React.createElement('div',{style:{height:"100%",width:`${Math.min(100,(overallAct/5)*100)}%`,background:SE.green,transition:"width .5s"}})
+        ),
+        React.createElement('div',{style:{display:"flex",justifyContent:"space-between",fontSize:9,color:SE.gray500,marginTop:3,fontWeight:700}},
+          React.createElement('span',{},"0"),
+          React.createElement('span',{style:{color:nextProfile.color}},`${nextProfile.min} →`),
+          React.createElement('span',{},"5")
+        )
+      ),
+      gapSubs.length>0&&React.createElement(Block,{},
+        React.createElement(SLabel,{text:lang==="es"?"Subdominios prioritarios a reforzar":"Priority subdomain gaps"}),
+        gapSubs.map((s,i)=>{
+          const info=buInfo(s.buId);const gap=s.ref-s.act;
+          return React.createElement('div',{key:s.id,style:{marginBottom:i<gapSubs.length-1?12:0,paddingBottom:i<gapSubs.length-1?12:0,borderBottom:i<gapSubs.length-1?`1px solid ${SE.gray100}`:"none"}},
+            React.createElement('div',{style:{display:"flex",alignItems:"center",gap:6,marginBottom:4}},
+              React.createElement('span',{style:{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:2,background:info.bg,color:info.color,letterSpacing:".04em"}},info.label),
+              React.createElement('span',{style:{fontSize:12,fontWeight:700,color:SE.black,flex:1}},s.label[lang]),
+              React.createElement('span',{style:{fontSize:12,fontWeight:700,color:SE.red}},`−${gap.toFixed(1)}`)
+            ),
+            React.createElement('div',{style:{fontSize:11,color:SE.gray700}},
+              lang==="es"
+                ?`Nivel actual: ${LVL.es[s.act]||s.act} (${s.act}) · Objetivo: ${LVL.es[s.ref]||s.ref} (${s.ref})`
+                :`Current level: ${LVL.en[s.act]||s.act} (${s.act}) · Target: ${LVL.en[s.ref]||s.ref} (${s.ref})`
+            )
+          );
+        })
+      ),
+      axGaps.length>0&&React.createElement(Block,{},
+        React.createElement(SLabel,{text:lang==="es"?"Ejes funcionales a reforzar":"Functional axes to strengthen"}),
+        axGaps.map(({ax,act})=>{
+          const raw=REC.axis[ax][lang];
+          const[advice,...rest]=raw.split('\n');
+          const courses=rest.join(' ').replace('📚 Coursera:','').trim();
+          return React.createElement('div',{key:ax,style:{marginBottom:14,paddingLeft:12,borderLeft:`3px solid ${SE.red}`}},
+            React.createElement('div',{style:{fontSize:12,fontWeight:700,color:SE.black,marginBottom:4}},
+              al[ax],' ',React.createElement('span',{style:{color:SE.red,fontWeight:400}},`(${act.toFixed(1)} / 5)`)
+            ),
+            React.createElement('div',{style:{fontSize:11,color:SE.gray700,lineHeight:1.5,marginBottom:6}},advice),
+            courses&&React.createElement('div',{style:{background:SE.gray50,border:`1px solid ${SE.gray300}`,borderRadius:2,padding:"6px 10px"}},
+              React.createElement('div',{style:{fontSize:9,fontWeight:700,color:SE.green,textTransform:"uppercase",letterSpacing:".08em",marginBottom:4}},"📚 Coursera"),
+              courses.split('·').map((c,i)=>React.createElement('div',{key:i,style:{fontSize:10,color:SE.gray700,marginBottom:i<courses.split('·').length-1?3:0}},`· ${c.trim()}`))
+            )
+          );
+        })
+      )
+    )
+  );
+}
+
+/* ── App ── */
+function App(){
+  const[lang,setLang]=useState("es");
+  const t=T[lang],al=AXIS_LABEL[lang];
+  const[step,setStep]=useState("setup");
+  const[role,setRole]=useState(null);
+  const[selBUs,setSelBUs]=useState([]);
+  const[selfDes,setSelfDes]=useState({});
+  const[manDes,setManDes]=useState({});
+  const[buIdx,setBuIdx]=useState(0);
+  const[qId,setQId]=useState(null);
+  const[scores,setScores]=useState({});
+  const[answered,setAnswered]=useState(0);
+
+  const curBU=selBUs[buIdx];
+  const qMap=curBU?buildQMap(curBU):{};
+  const curQ=qId?qMap[qId]:null;
+  const totalQ=selBUs.reduce((a,bu)=>(TREES[bu]?.subs||[]).reduce((b,s)=>b+s.qs.length,a),0);
+
+  const initDesired=(bus,r)=>{const sd={},md={};bus.forEach(bu=>(TREES[bu]?.subs||[]).forEach(s=>{const c=getCeiling(s.id,r);sd[s.id]=c;md[s.id]=c;}));setSelfDes(sd);setManDes(md);};
+  const toggleBU=id=>{const next=selBUs.includes(id)?selBUs.filter(b=>b!==id):[...selBUs,id];setSelBUs(next);if(role)initDesired(next,role);};
+  const selectRole=r=>{setRole(r);if(selBUs.length)initDesired(selBUs,r);};
+  const startAssess=()=>{setBuIdx(0);setQId(firstQ(selBUs[0]));setScores({});setAnswered(0);setStep("assess");};
+  const recScore=(bu,sdId,sc)=>setScores(p=>{const k=`${bu}_${sdId}`;return{...p,[k]:Math.max(p[k]||0,sc)};});
+  const answer=yes=>{
+    if(!curQ)return;
+    setAnswered(c=>c+1);
+    recScore(curBU,curQ.sdId,yes?(curQ.ysc??curQ.lv):curQ.nsc);
+    if(!yes||!curQ.yes){const nf=nextSdFirst(curBU,curQ.sdId);if(nf)setQId(nf);else if(buIdx+1<selBUs.length){const ni=buIdx+1;setBuIdx(ni);setQId(firstQ(selBUs[ni]));}else setStep("results");}
+    else setQId(curQ.yes);
+  };
+  const restart=()=>{setStep("setup");setRole(null);setSelBUs([]);setSelfDes({});setManDes({});setBuIdx(0);setQId(null);setScores({});setAnswered(0);};
+
+  const compute=()=>{
+    const buRes={};selBUs.forEach(bu=>{const subs=TREES[bu]?.subs||[];let tot=0,cnt=0;subs.forEach(sd=>{tot+=(scores[`${bu}_${sd.id}`]||0);cnt++;});buRes[bu]=cnt?tot/cnt:0;});
+    const axBuckets={};AXES.forEach(ax=>{axBuckets[ax]=[];});
+    selBUs.forEach(bu=>{(TREES[bu]?.subs||[]).forEach(sd=>{const sdScore=scores[`${bu}_${sd.id}`]||0;sd.qs.forEach(q=>{if(q.lv<=sdScore&&axBuckets[q.axis])axBuckets[q.axis].push(sdScore);});if(sdScore===0)sd.qs.filter(q=>q.lv===1).forEach(q=>{if(axBuckets[q.axis])axBuckets[q.axis].push(0);});});});
+    const axRes={};AXES.forEach(ax=>{const arr=axBuckets[ax];axRes[ax]=arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:0;});
+    const overallAct=selBUs.length?Object.values(buRes).reduce((a,b)=>a+b,0)/selBUs.length:0;
+    const allSubsList=selBUs.flatMap(bu=>TREES[bu]?.subs||[]);
+    const selfAxes={},manAxes={};
+    AXES.forEach(ax=>{selfAxes[ax]=allSubsList.reduce((a,s)=>a+(selfDes[s.id]||getCeiling(s.id,role)),0)/(allSubsList.length||1);manAxes[ax]=allSubsList.reduce((a,s)=>a+(manDes[s.id]||getCeiling(s.id,role)),0)/(allSubsList.length||1);});
+    const overallSelf=allSubsList.length?allSubsList.reduce((a,s)=>a+(selfDes[s.id]||getCeiling(s.id,role)),0)/allSubsList.length:3;
+    const overallMan=allSubsList.length?allSubsList.reduce((a,s)=>a+(manDes[s.id]||getCeiling(s.id,role)),0)/allSubsList.length:3;
+    return{buRes,axRes,overallAct,selfAxes,manAxes,overallSelf,overallMan};
+  };
+  const{buRes={},axRes={},overallAct=0,selfAxes={},manAxes={},overallSelf=0,overallMan=0}=step==="results"?compute():{};
+  const profAct=step==="results"?profileFor(overallAct):null;
+  const profSelf=step==="results"?profileFor(overallSelf):null;
+  const profMan=step==="results"?profileFor(overallMan):null;
+  const allSubs=selBUs.flatMap(bu=>(TREES[bu]?.subs||[]).map(s=>({...s,buId:bu})));
+
+  const SELogo=()=>React.createElement('svg',{width:32,height:32,viewBox:"0 0 100 100",fill:"none",xmlns:"http://www.w3.org/2000/svg"},
+    React.createElement('rect',{width:100,height:100,rx:4,fill:SE.green}),
+    React.createElement('text',{x:50,y:68,textAnchor:"middle",fontSize:58,fontWeight:900,fill:"white",fontFamily:"Arial,sans-serif"},"S")
+  );
+
+  const wrap=content=>React.createElement('div',{style:{fontFamily:"Arial,sans-serif",maxWidth:700,margin:"0 auto",background:SE.white,minHeight:"100vh"}},
+    React.createElement('div',{style:{background:SE.green,padding:"0 24px",display:"flex",alignItems:"center",justifyContent:"space-between",height:52}},
+      React.createElement('div',{style:{display:"flex",alignItems:"center",gap:10}},
+        React.createElement(SELogo),
+        React.createElement('div',{},
+          React.createElement('div',{style:{fontSize:13,fontWeight:700,color:SE.white,letterSpacing:".04em"}},"Schneider Electric"),
+          React.createElement('div',{style:{fontSize:10,color:"rgba(255,255,255,.75)",letterSpacing:".06em",textTransform:"uppercase"}},t.appSub)
+        )
+      ),
+      React.createElement('div',{style:{display:"flex",gap:4}},
+        ["es","en"].map(l=>React.createElement('button',{key:l,onClick:()=>setLang(l),style:{padding:"4px 12px",fontSize:11,fontWeight:700,letterSpacing:".06em",border:`1px solid ${lang===l?"white":"rgba(255,255,255,.4)"}`,background:lang===l?"white":"transparent",color:lang===l?SE.green:"white",cursor:"pointer",borderRadius:2}},l.toUpperCase()))
+      )
+    ),
+    React.createElement('div',{style:{background:SE.gray50,borderBottom:`1px solid ${SE.gray300}`,padding:"12px 24px"}},
+      React.createElement('h1',{style:{margin:0,fontSize:20,fontWeight:700,color:SE.black,letterSpacing:".02em"}},t.appTitle)
+    ),
+    React.createElement('div',{style:{padding:"20px 24px"}},content)
+  );
+
+  if(step==="setup") return wrap(React.createElement('div',{},
+    React.createElement('div',{style:{marginBottom:20}},
+      React.createElement('div',{style:css.sectionTitle},t.stepRole),
+      ROLES.map(r=>{const sel=role===r.id;return React.createElement('button',{key:r.id,onClick:()=>selectRole(r.id),style:{display:"flex",alignItems:"center",gap:12,width:"100%",textAlign:"left",padding:"12px 16px",marginBottom:6,border:`1px solid ${sel?SE.green:SE.gray300}`,borderLeft:`4px solid ${sel?SE.green:SE.gray300}`,background:sel?SE.greenLight:SE.white,cursor:"pointer",borderRadius:2}},
+        React.createElement('span',{style:{fontSize:18}},r.icon),
+        React.createElement('div',{style:{flex:1}},
+          React.createElement('div',{style:{fontSize:13,fontWeight:700,color:sel?SE.greenDark:SE.black}},r.label[lang]),
+          React.createElement('div',{style:{fontSize:11,color:SE.gray500,marginTop:2}},r.focus[lang])
+        ),
+        sel&&React.createElement('div',{style:{width:20,height:20,borderRadius:2,background:SE.green,display:"flex",alignItems:"center",justifyContent:"center"}},React.createElement('span',{style:{color:SE.white,fontSize:12,fontWeight:700}},"✓"))
+      );})
+    ),
+    React.createElement('div',{style:{marginBottom:20}},
+      React.createElement('div',{style:css.sectionTitle},t.stepBU),
+      React.createElement('div',{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}},
+        BUS.map(bu=>{const sel=selBUs.includes(bu.id);return React.createElement('button',{key:bu.id,onClick:()=>toggleBU(bu.id),style:{padding:"10px 12px",border:`1px solid ${sel?bu.color:SE.gray300}`,borderTop:`3px solid ${sel?bu.color:SE.gray300}`,background:sel?bu.bg:SE.white,color:sel?bu.color:SE.gray700,cursor:"pointer",fontSize:12,fontWeight:700,textAlign:"center",borderRadius:2,letterSpacing:".04em"}},`${sel?"✓ ":""}${bu.label}`);})
+      )
+    ),
+    role&&selBUs.length>0&&React.createElement('div',{style:{marginBottom:20}},
+      React.createElement('div',{style:css.sectionTitle},t.stepDesired),
+      React.createElement('div',{style:{fontSize:11,color:SE.gray500,marginBottom:14,borderLeft:`3px solid ${SE.green}`,paddingLeft:10}},t.desiredSub),
+      selBUs.map(buId=>{const info=buInfo(buId);return React.createElement('div',{key:buId,style:{marginBottom:16,border:`1px solid ${SE.gray300}`,borderTop:`3px solid ${info.color}`,borderRadius:2,padding:"14px 16px"}},
+        React.createElement('div',{style:{fontSize:12,fontWeight:700,color:info.color,letterSpacing:".06em",textTransform:"uppercase",marginBottom:12}},info.label),
+        (TREES[buId]?.subs||[]).map(sd=>React.createElement(DesiredSlider,{key:sd.id,sdId:sd.id,sdLabel:sd.label,role,value:selfDes[sd.id]??getCeiling(sd.id,role),onChange:v=>setSelfDes(p=>({...p,[sd.id]:v})),accentColor:info.color,lang}))
+      );})
+    ),
+    role&&selBUs.length>0&&React.createElement('div',{style:{marginBottom:20}},
+      React.createElement('div',{style:css.sectionTitle},t.stepManager),
+      React.createElement('div',{style:{fontSize:11,color:SE.gray500,marginBottom:14,borderLeft:`3px solid ${SE.amber}`,paddingLeft:10}},t.managerSub),
+      selBUs.map(buId=>{const info=buInfo(buId);return React.createElement('div',{key:buId,style:{marginBottom:16,border:`1px solid ${SE.gray300}`,borderTop:`3px solid ${SE.amber}`,borderRadius:2,padding:"14px 16px"}},
+        React.createElement('div',{style:{fontSize:12,fontWeight:700,color:SE.amber,letterSpacing:".06em",textTransform:"uppercase",marginBottom:12}},info.label),
+        (TREES[buId]?.subs||[]).map(sd=>React.createElement(DesiredSlider,{key:sd.id,sdId:sd.id,sdLabel:sd.label,role,value:manDes[sd.id]??getCeiling(sd.id,role),onChange:v=>setManDes(p=>({...p,[sd.id]:v})),accentColor:SE.amber,lang}))
+      );})
+    ),
+    React.createElement('button',{onClick:startAssess,disabled:!role||!selBUs.length,style:{...css.btn,background:(!role||!selBUs.length)?SE.gray300:SE.green,color:(!role||!selBUs.length)?SE.gray500:SE.white,opacity:1,cursor:(!role||!selBUs.length)?"not-allowed":"pointer"}},`${t.start} →`)
+  ));
+
+  if(step==="assess"&&curQ) return wrap(React.createElement('div',{},
+    React.createElement('div',{style:{marginBottom:20}},
+      React.createElement('div',{style:{display:"flex",justifyContent:"space-between",marginBottom:6}},
+        React.createElement('span',{style:{fontSize:11,fontWeight:700,color:SE.gray500,textTransform:"uppercase",letterSpacing:".07em"}},t.progress),
+        React.createElement('span',{style:{fontSize:11,fontWeight:700,color:SE.black}},`${answered} ${t.of} ~${totalQ}`)
+      ),
+      React.createElement('div',{style:{height:6,background:SE.gray100,border:`1px solid ${SE.gray300}`,borderRadius:2,overflow:"hidden"}},
+        React.createElement('div',{style:{height:"100%",width:`${Math.min(100,answered/totalQ*100)}%`,background:SE.green,transition:"width .3s"}})
+      )
+    ),
+    React.createElement('div',{style:{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginBottom:12}},
+      React.createElement('span',{style:{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:2,background:buInfo(curBU).bg,color:buInfo(curBU).color,border:`1px solid ${buInfo(curBU).color}`,letterSpacing:".06em"}},buInfo(curBU).label),
+      React.createElement('span',{style:{color:SE.gray300,fontSize:14}},"›"),
+      React.createElement('span',{style:{fontSize:11,color:SE.gray700,fontWeight:700}},curQ.sdLabel[lang]),
+      React.createElement('div',{style:{marginLeft:"auto",fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:2,background:SE.greenLight,color:SE.greenDark,border:`1px solid ${SE.green}`,letterSpacing:".06em"}},`${t.level} ${curQ.lv} / 5`)
+    ),
+    React.createElement('div',{style:{border:`1px solid ${SE.gray300}`,borderLeft:`4px solid ${SE.green}`,borderRadius:2,padding:"20px",marginBottom:14,background:SE.white}},
+      React.createElement('p',{style:{margin:0,fontSize:15,lineHeight:1.7,color:SE.black}},curQ.t[lang])
+    ),
+    React.createElement('div',{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}},
+      React.createElement('button',{onClick:()=>answer(true),style:{...css.btn,background:SE.green,color:SE.white}},`✓ ${t.yes}`),
+      React.createElement('button',{onClick:()=>answer(false),style:{...css.btn,background:SE.white,color:SE.gray700,border:`1px solid ${SE.gray300}`}},`✗ ${t.no}`)
+    )
+  ));
+
+  if(step==="results"&&profAct) return wrap(React.createElement('div',{},
+    React.createElement('div',{style:css.sectionTitle},t.results),
+    React.createElement('div',{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}},
+      [{label:t.profileActual,prof:profAct,score:overallAct,c:SE.green},{label:t.profileSelf,prof:profSelf,score:overallSelf,c:SE.greenDark},{label:t.profileManager,prof:profMan,score:overallMan,c:SE.amber}].map(({label,prof,score,c},i)=>
+        React.createElement('div',{key:i,style:{border:`1px solid ${SE.gray300}`,borderTop:`4px solid ${c}`,borderRadius:2,padding:"12px 14px",background:SE.white}},
+          React.createElement('div',{style:{fontSize:9,fontWeight:700,color:SE.gray500,textTransform:"uppercase",letterSpacing:".1em",marginBottom:4}},label),
+          React.createElement('div',{style:{fontSize:12,fontWeight:700,color:prof.color,marginBottom:4,lineHeight:1.3}},prof.label[lang]),
+          React.createElement('div',{style:{fontSize:22,fontWeight:700,color:prof.color}},score.toFixed(1),React.createElement('span',{style:{fontSize:11,fontWeight:400,color:SE.gray500}}," / 5.0"))
+        )
+      )
+    ),
+    React.createElement('div',{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}},
+      React.createElement('div',{style:{border:`1px solid ${SE.gray300}`,borderRadius:2,padding:"14px",background:SE.white}},
+        React.createElement('div',{style:{fontSize:10,fontWeight:700,color:SE.green,textTransform:"uppercase",letterSpacing:".1em",marginBottom:8,textAlign:"center"}},t.radarTitle),
+        React.createElement(Radar,{actual:axRes,self:selfAxes,manager:manAxes,lang}),
+        React.createElement('div',{style:{display:"flex",justifyContent:"center",gap:12,marginTop:8,flexWrap:"wrap"}},
+          [{c:SE.green,dash:false,label:t.actual},{c:SE.greenDark,dash:true,label:t.selfTarget},{c:SE.amber,dash:true,label:t.managerTarget}].map(({c,dash,label})=>
+            React.createElement('div',{key:label,style:{display:"flex",alignItems:"center",gap:4,fontSize:9,fontWeight:700,color:SE.gray700}},
+              React.createElement('svg',{width:16,height:4},React.createElement('line',{x1:0,y1:2,x2:16,y2:2,stroke:c,strokeWidth:"2.5",strokeDasharray:dash?"5,2":"none"})),
+              label
+            )
+          )
+        )
+      ),
+      React.createElement('div',{style:{border:`1px solid ${SE.gray300}`,borderRadius:2,padding:"14px",background:SE.white}},
+        React.createElement('div',{style:{fontSize:10,fontWeight:700,color:SE.green,textTransform:"uppercase",letterSpacing:".1em",marginBottom:12}},t.axesTitle),
+        AXES.map(ax=>{
+          const act=axRes[ax]||0,self=selfAxes[ax]||0,man=manAxes[ax]||0;
+          const maxGap=Math.max(self-act,man-act,0);
+          const col=maxGap>1.5?SE.red:maxGap>0.5?SE.amber:SE.green;
+          return React.createElement('div',{key:ax,style:{marginBottom:9}},
+            React.createElement('div',{style:{display:"flex",justifyContent:"space-between",marginBottom:3}},
+              React.createElement('span',{style:{fontSize:11,fontWeight:700,color:SE.gray900}},al[ax]),
+              React.createElement('span',{style:{fontSize:11,fontWeight:700,color:col}},act.toFixed(1))
+            ),
+            React.createElement('div',{style:{height:6,background:SE.gray100,borderRadius:2,position:"relative",border:`1px solid ${SE.gray300}`}},
+              React.createElement('div',{style:{position:"absolute",left:0,top:0,height:"100%",width:`${(Math.max(self,man)/5)*100}%`,background:"rgba(0,0,0,.05)",borderRadius:2}}),
+              React.createElement('div',{style:{position:"absolute",left:`${(man/5)*100}%`,top:-3,width:2,height:12,background:SE.amber,borderRadius:1,transform:"translateX(-50%)"}}),
+              React.createElement('div',{style:{position:"absolute",left:`${(self/5)*100}%`,top:-3,width:2,height:12,background:SE.greenDark,borderRadius:1,transform:"translateX(-50%)"}}),
+              React.createElement('div',{style:{position:"absolute",left:0,top:0,height:"100%",width:`${(act/5)*100}%`,background:col,borderRadius:2,transition:"width .5s"}})
+            )
+          );
+        })
+      )
+    ),
+    React.createElement('div',{style:{border:`1px solid ${SE.gray300}`,borderRadius:2,padding:"14px 16px",marginBottom:12,background:SE.white}},
+      React.createElement('div',{style:css.sectionTitle},t.buScores),
+      selBUs.map(bu=>{
+        const info=buInfo(bu),act=buRes[bu]||0;
+        const subs=TREES[bu]?.subs||[];
+        const selfAvg=subs.reduce((a,s)=>a+(selfDes[s.id]||getCeiling(s.id,role)),0)/(subs.length||1);
+        const manAvg=subs.reduce((a,s)=>a+(manDes[s.id]||getCeiling(s.id,role)),0)/(subs.length||1);
+        return React.createElement('div',{key:bu,style:{marginBottom:10}},
+          React.createElement('div',{style:{display:"flex",justifyContent:"space-between",marginBottom:4}},
+            React.createElement('span',{style:{fontSize:12,fontWeight:700,color:info.color,letterSpacing:".04em"}},info.label),
+            React.createElement('span',{style:{fontSize:12}},
+              React.createElement('span',{style:{fontWeight:700,color:info.color}},act.toFixed(1)),
+              React.createElement('span',{style:{color:SE.gray500,fontSize:10}},` · ${selfAvg.toFixed(1)} · ${manAvg.toFixed(1)}`)
+            )
+          ),
+          React.createElement('div',{style:{height:8,background:SE.gray100,borderRadius:2,position:"relative",border:`1px solid ${SE.gray300}`}},
+            React.createElement('div',{style:{position:"absolute",left:0,top:0,height:"100%",width:`${(Math.max(selfAvg,manAvg)/5)*100}%`,background:`${info.color}18`,borderRadius:2}}),
+            React.createElement('div',{style:{position:"absolute",left:`${(manAvg/5)*100}%`,top:-2,width:2,height:12,background:SE.amber,borderRadius:1,transform:"translateX(-50%)"}}),
+            React.createElement('div',{style:{position:"absolute",left:`${(selfAvg/5)*100}%`,top:-2,width:2,height:12,background:SE.greenDark,borderRadius:1,transform:"translateX(-50%)"}}),
+            React.createElement('div',{style:{position:"absolute",left:0,top:0,height:"100%",width:`${(act/5)*100}%`,background:info.color,borderRadius:2,transition:"width .5s"}})
+          )
+        );
+      }),
+      React.createElement('div',{style:{marginTop:8,fontSize:10,fontWeight:700,color:SE.gray500,letterSpacing:".04em"}},
+        React.createElement('span',{style:{color:SE.greenDark}},`— ${t.selfTarget}`),
+        "   ",
+        React.createElement('span',{style:{color:SE.amber}},`— ${t.managerTarget}`)
+      )
+    ),
+    React.createElement('div',{style:{border:`1px solid ${SE.gray300}`,borderRadius:2,padding:"14px 16px",marginBottom:12,background:SE.white}},
+      React.createElement('div',{style:css.sectionTitle},t.gaps),
+      allSubs.filter(s=>{const act=scores[`${s.buId}_${s.id}`]||0;const ref=Math.max(selfDes[s.id]||0,manDes[s.id]||0);return ref-act>=1;}).length===0
+        ?React.createElement('div',{style:{display:"flex",alignItems:"center",gap:8,fontSize:12,color:SE.greenDark,fontWeight:700}},
+          React.createElement('div',{style:{width:20,height:20,borderRadius:2,background:SE.green,display:"flex",alignItems:"center",justifyContent:"center",color:SE.white,fontSize:12}},"✓"),
+          t.noGaps
+        )
+        :allSubs.filter(s=>{const act=scores[`${s.buId}_${s.id}`]||0;const ref=Math.max(selfDes[s.id]||0,manDes[s.id]||0);return ref-act>=1;}).map(s=>{
+          const info=buInfo(s.buId),act=scores[`${s.buId}_${s.id}`]||0;
+          const self=selfDes[s.id]||0,man=manDes[s.id]||0,ref=Math.max(self,man),gap=ref-act;
+          return React.createElement('div',{key:s.id,style:{display:"flex",alignItems:"center",gap:8,marginBottom:6,padding:"8px 10px",background:SE.redLight,border:`1px solid #FADBD8`,borderLeft:`3px solid ${SE.red}`,borderRadius:2}},
+            React.createElement('span',{style:{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:2,background:info.bg,color:info.color,letterSpacing:".04em",whiteSpace:"nowrap"}},info.label),
+            React.createElement('span',{style:{fontSize:12,color:SE.black,flex:1,fontWeight:700}},s.label[lang]),
+            React.createElement('span',{style:{fontSize:10,color:SE.gray500,whiteSpace:"nowrap"}},`${act} · ${self} · ${man}`),
+            React.createElement('span',{style:{fontSize:12,fontWeight:700,color:SE.red,whiteSpace:"nowrap"}},`−${gap.toFixed(1)}`)
+          );
+        })
+    ),
+    React.createElement(Recommendations,{scores,axRes,buRes,overallAct,overallSelf,overallMan,profAct,profSelf,profMan,role,selBUs,selfDes,manDes,allSubs,lang,t,al}),
+    React.createElement('button',{onClick:restart,style:{...css.btn,background:SE.white,color:SE.gray700,border:`1px solid ${SE.gray300}`,marginTop:4}},`← ${t.restart}`)
+  ));
+
+  return null;
+}
+
+const root=ReactDOM.createRoot(document.getElementById('root'));
+root.render(React.createElement(App));
+</script>
+</body>
+</html>
